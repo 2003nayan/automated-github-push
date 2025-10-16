@@ -1,0 +1,117 @@
+# Code Backup Daemon Configuration
+# This file contains all configuration options for the daemon
+
+# Daemon settings
+daemon:
+  # Backup interval in seconds (86400 = 24 hours)
+  backup_interval: 86400
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  log_level: INFO
+  # Process ID file location
+  pid_file: ~/.local/share/code-backup/daemon.pid
+  # Log file location  
+  log_file: ~/.local/share/code-backup/daemon.log
+  # State file location (tracks repositories)
+  state_file: ~/.local/share/code-backup/state.json
+
+# Path configuration
+paths:
+  # Main code folder to monitor
+  code_folder: /home/nayan-ai4m/Desktop/NK
+  # Configuration directory
+  config_dir: ~/.config/code-backup
+  # Data directory for logs and state
+  data_dir: ~/.local/share/code-backup
+
+# GitHub settings
+github:
+  # Your GitHub username (required)
+  username: ""
+  # Default repository visibility: private or public
+  default_visibility: private
+  # Create repositories in organization instead of personal account
+  create_org_repos: false
+  # Organization name (if create_org_repos is true)
+  organization: ""
+  # Use GitHub CLI (gh) instead of direct API calls
+  use_gh_cli: true
+
+# Git settings
+git:
+  # Default branch name for new repositories
+  default_branch: main
+  # Auto-commit message template
+  auto_commit_message: "Auto-backup: {timestamp}"
+  # Pull from remote before pushing
+  pull_before_push: true
+  # How to handle merge conflicts: skip, notify, or force
+  handle_conflicts: skip
+
+# Project detection settings
+project_detection:
+  # Minimum size in bytes to consider a folder a project
+  min_size_bytes: 1024
+  # Files that indicate a project
+  project_indicators:
+    - package.json
+    - requirements.txt
+    - Cargo.toml
+    - go.mod
+    - pom.xml
+    - Gemfile
+    - composer.json
+    - setup.py
+    - pyproject.toml
+    - README.md
+    - Makefile
+  # Source code file extensions
+  code_extensions:
+    - .py
+    - .js
+    - .ts
+    - .jsx
+    - .tsx
+    - .java
+    - .cpp
+    - .c
+    - .h
+    - .go
+    - .rs
+    - .php
+    - .rb
+    - .swift
+    - .kt
+    - .cs
+    - .scala
+    - .clj
+    - .hs
+    - .elm
+  # Folder patterns to ignore
+  ignore_patterns:
+    - node_modules
+    - venv
+    - .venv
+    - env
+    - __pycache__
+    - .cache
+    - dist
+    - build
+    - target
+    - .git
+    - .svn
+    - .idea
+    - .vscode
+    - tmp
+    - temp
+    - .DS_Store
+
+# Notification settings
+notifications:
+  # Enable notifications
+  enabled: true
+  # Notify on errors
+  on_error: true
+  # Notify when new repository is created
+  on_new_repo: true
+  # Notify when backup completes (can be noisy)
+  on_backup_complete: false

@@ -1,0 +1,434 @@
+# Generate main.py - Main daemon application
+main_content = '''"""
+Main entry point for Code Backup Daemon
+"""
+import logging
+import sys
+from pathlib import Path
+
+# Add current directory to Python path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import Config
+from backup_service import BackupService
+
+logger = logging.getLogger(__name__)
+
+def setup_logging(config):
+    """Setup logging configuration"""
+    log_level = config.get('daemon.log_level', 'INFO')
+    log_file = config.get_path('daemon.log_file')
+    
+    # Ensure log directory exists
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Setup logging
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+
+def main():
+    """Main entry point"""
+    try:
+        # Load configuration
+        config = Config()
+        
+        # Setup logging
+        setup_logging(config)
+        
+        logger.info("Starting Code Backup Daemon")
+        
+        # Validate configuration
+        if not config.validate():
+            logger.error("Configuration validation failed")
+            sys.exit(1)
+        
+        # Create and start backup service
+        service = BackupService(config)
+        service.start()
+        
+        # Keep running until interrupted
+        try:
+            import signal
+            import time
+            
+            def signal_handler(signum, frame):
+                logger.info("Received shutdown signal")
+                service.stop()
+                sys.exit(0)
+            
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
+            
+            while service.is_running:
+                time.sleep(1)
+                
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt")
+        finally:
+            service.stop()
+            
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
+'''
+
+with open("main.py", "w") as f:
+    f.write(main_content)
+
+print("✅ Generated main.py")
+
+# Generate utils.py - Utility functions
+utils_content = '''"""
+Utility functions for Code Backup Daemon
+"""
+import os
+import subprocess
+import logging
+from typing import Optional, List, Dict, Any
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+def run_command(cmd: List[str], cwd: Optional[Path] = None, timeout: int = 30) -> Dict[str, Any]:
+    """
+    Run a command and return result
+    
+    Args:
+        cmd: Command and arguments as list
+        cwd: Working directory
+        timeout: Timeout in seconds
+        
+    Returns:
+        Dict with returncode, stdout, stderr
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False
+        )
+        
+        return {
+            'returncode': result.returncode,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'success': result.returncode == 0
+        }
+        
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"Command timeout: {' '.join(cmd)}")
+        return {
+            'returncode': -1,
+            'stdout': '',
+            'stderr': f'Command timeout after {timeout}s',
+            'success': False
+        }
+    except Exception as e:
+        logger.error(f"Command failed: {' '.join(cmd)}: {e}")
+        return {
+            'returncode': -1,
+            'stdout': '',
+            'stderr': str(e),
+            'success': False
+        }
+
+def is_command_available(command: str) -> bool:
+    """Check if a command is available in PATH"""
+    try:
+        subprocess.run([command, '--version'], 
+                      capture_output=True, 
+                      check=True, 
+                      timeout=5)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+def get_file_size(path: Path) -> int:
+    """Get total size of a file or directory in bytes"""
+    if path.is_file():
+        return path.stat().st_size
+    elif path.is_dir():
+        total = 0
+        try:
+            for file_path in path.rglob('*'):
+                if file_path.is_file():
+                    total += file_path.stat().st_size
+        except (PermissionError, OSError):
+            pass
+        return total
+    else:
+        return 0
+
+def format_size(size_bytes: int) -> str:
+    """Format size in bytes to human readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f} PB"
+
+def is_text_file(file_path: Path) -> bool:
+    """Check if file is likely a text file"""
+    try:
+        with open(file_path, 'rb') as f:
+            chunk = f.read(1024)
+            
+        text_chars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
+        return bool(chunk) and not bool(chunk.translate(None, text_chars))
+    except:
+        return False
+
+def sanitize_repo_name(name: str) -> str:
+    """Sanitize repository name for GitHub"""
+    # Replace invalid characters with hyphens
+    import re
+    sanitized = re.sub(r'[^a-zA-Z0-9._-]', '-', name)
+    
+    # Remove multiple consecutive hyphens
+    sanitized = re.sub(r'-+', '-', sanitized)
+    
+    # Remove leading/trailing hyphens
+    sanitized = sanitized.strip('-')
+    
+    # Ensure not empty
+    if not sanitized:
+        sanitized = 'project'
+    
+    return sanitized
+
+def create_gitignore_patterns(project_type: str = 'auto') -> List[str]:
+    """Generate .gitignore patterns based on project type"""
+    base_patterns = [
+        '# Auto-generated by code-backup-daemon',
+        '',
+        '# OS generated files',
+        '.DS_Store',
+        '.DS_Store?',
+        '._*',
+        '.Spotlight-V100',
+        '.Trashes',
+        'ehthumbs.db',
+        'Thumbs.db',
+        '',
+        '# IDE files',
+        '.vscode/',
+        '.idea/',
+        '*.swp',
+        '*.swo',
+        '*~',
+        '',
+        '# Logs',
+        '*.log',
+        'logs/',
+        '',
+        '# Runtime data',
+        'pids/',
+        '*.pid',
+        '*.seed',
+        '*.pid.lock',
+        ''
+    ]
+    
+    if project_type == 'python' or project_type == 'auto':
+        base_patterns.extend([
+            '# Python',
+            '__pycache__/',
+            '*.py[cod]',
+            '*$py.class',
+            '*.so',
+            '.Python',
+            'build/',
+            'develop-eggs/',
+            'dist/',
+            'downloads/',
+            'eggs/',
+            '.eggs/',
+            'lib/',
+            'lib64/',
+            'parts/',
+            'sdist/',
+            'var/',
+            'wheels/',
+            '*.egg-info/',
+            '.installed.cfg',
+            '*.egg',
+            'MANIFEST',
+            'venv/',
+            'env/',
+            'ENV/',
+            '.venv/',
+            '.env',
+            ''
+        ])
+    
+    if project_type == 'node' or project_type == 'auto':
+        base_patterns.extend([
+            '# Node.js',
+            'node_modules/',
+            'npm-debug.log*',
+            'yarn-debug.log*',
+            'yarn-error.log*',
+            '.npm',
+            '.yarn-integrity',
+            '.env.local',
+            '.env.development.local',
+            '.env.test.local',
+            '.env.production.local',
+            ''
+        ])
+    
+    if project_type == 'java' or project_type == 'auto':
+        base_patterns.extend([
+            '# Java',
+            '*.class',
+            '*.jar',
+            '*.war',
+            '*.ear',
+            'target/',
+            '.gradle/',
+            'build/',
+            ''
+        ])
+    
+    return base_patterns
+
+def check_disk_space(path: Path, min_space_mb: int = 100) -> bool:
+    """Check if there's enough disk space"""
+    try:
+        stat = os.statvfs(path)
+        free_space_mb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
+        return free_space_mb >= min_space_mb
+    except:
+        return True  # Assume OK if we can't check
+
+def is_binary_file(file_path: Path) -> bool:
+    """Check if file is binary"""
+    try:
+        with open(file_path, 'tr') as f:
+            f.read()
+        return False
+    except:
+        return True
+
+def get_project_type(project_path: Path) -> str:
+    """Detect project type based on files present"""
+    indicators = {
+        'python': ['requirements.txt', 'setup.py', 'pyproject.toml', 'Pipfile'],
+        'node': ['package.json', 'yarn.lock', 'package-lock.json'],
+        'java': ['pom.xml', 'build.gradle', 'gradle.properties'],
+        'rust': ['Cargo.toml', 'Cargo.lock'],
+        'go': ['go.mod', 'go.sum'],
+        'php': ['composer.json', 'composer.lock'],
+        'ruby': ['Gemfile', 'Gemfile.lock'],
+        'cpp': ['CMakeLists.txt', 'Makefile', 'configure.ac'],
+        'csharp': ['*.csproj', '*.sln'],
+        'swift': ['Package.swift', '*.xcodeproj']
+    }
+    
+    for project_type, files in indicators.items():
+        for file_pattern in files:
+            if list(project_path.glob(file_pattern)):
+                return project_type
+    
+    # Check for common source file extensions
+    extensions = {
+        '.py': 'python',
+        '.js': 'node',
+        '.ts': 'node', 
+        '.java': 'java',
+        '.rs': 'rust',
+        '.go': 'go',
+        '.php': 'php',
+        '.rb': 'ruby',
+        '.cpp': 'cpp',
+        '.c': 'cpp',
+        '.cs': 'csharp',
+        '.swift': 'swift'
+    }
+    
+    for file_path in project_path.rglob('*'):
+        if file_path.is_file() and file_path.suffix in extensions:
+            return extensions[file_path.suffix]
+    
+    return 'generic'
+
+def validate_github_repo_name(name: str) -> bool:
+    """Validate GitHub repository name"""
+    if not name:
+        return False
+    
+    # GitHub repo name rules
+    if len(name) > 100:
+        return False
+    
+    # Must not start or end with special characters
+    if name.startswith(('.', '-')) or name.endswith(('.', '-')):
+        return False
+    
+    # Only alphanumeric, hyphens, underscores, and dots
+    import re
+    if not re.match(r'^[a-zA-Z0-9._-]+$', name):
+        return False
+    
+    return True
+
+def send_desktop_notification(title: str, message: str):
+    """Send desktop notification (cross-platform)"""
+    try:
+        import platform
+        system = platform.system()
+        
+        if system == 'Darwin':  # macOS
+            subprocess.run([
+                'osascript', '-e',
+                f'display notification "{message}" with title "{title}"'
+            ], check=False)
+        elif system == 'Linux':
+            # Try notify-send
+            subprocess.run([
+                'notify-send', title, message
+            ], check=False)
+        elif system == 'Windows':
+            # Try Windows toast notification
+            try:
+                from plyer import notification
+                notification.notify(
+                    title=title,
+                    message=message,
+                    timeout=5
+                )
+            except ImportError:
+                pass
+                
+    except Exception as e:
+        logger.debug(f"Could not send desktop notification: {e}")
+
+def estimate_upload_time(size_bytes: int, upload_speed_mbps: int = 10) -> int:
+    """Estimate upload time in seconds"""
+    if size_bytes == 0:
+        return 0
+    
+    # Convert to megabits
+    size_mb = size_bytes / (1024 * 1024)
+    size_mbits = size_mb * 8
+    
+    # Calculate time in seconds
+    return int(size_mbits / upload_speed_mbps)
+'''
+
+with open("utils.py", "w") as f:
+    f.write(utils_content)
+
+print("✅ Generated utils.py")
