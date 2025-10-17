@@ -455,9 +455,16 @@ class BackupService:
             # Ensure directory exists
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
 
+            # Convert datetime objects to ISO format strings
+            stats_copy = self.stats.copy()
+            if stats_copy.get('start_time'):
+                stats_copy['start_time'] = stats_copy['start_time'].isoformat()
+            if stats_copy.get('last_backup_time'):
+                stats_copy['last_backup_time'] = stats_copy['last_backup_time'].isoformat()
+
             data = {
                 'tracked_repos': self.tracked_repos,
-                'stats': self.stats,
+                'stats': stats_copy,
                 'last_saved': datetime.now().isoformat()
             }
 
