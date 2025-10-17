@@ -458,9 +458,11 @@ class BackupService:
             # Convert datetime objects to ISO format strings
             stats_copy = self.stats.copy()
             if stats_copy.get('start_time'):
-                stats_copy['start_time'] = stats_copy['start_time'].isoformat()
+                if isinstance(stats_copy['start_time'], datetime):
+                    stats_copy['start_time'] = stats_copy['start_time'].isoformat()
             if stats_copy.get('last_backup_time'):
-                stats_copy['last_backup_time'] = stats_copy['last_backup_time'].isoformat()
+                if isinstance(stats_copy['last_backup_time'], datetime):
+                    stats_copy['last_backup_time'] = stats_copy['last_backup_time'].isoformat()
 
             data = {
                 'tracked_repos': self.tracked_repos,
