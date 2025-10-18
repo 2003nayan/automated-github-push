@@ -29,8 +29,21 @@ class GitHubService:
             'default_visibility': account_config.get('default_visibility', 'private'),
             'create_org_repos': account_config.get('create_org_repos', False),
             'organization': account_config.get('organization', ''),
-            'use_gh_cli': account_config.get('use_gh_cli', True)
+            'use_gh_cli': account_config.get('use_gh_cli', True),
+            'ssh_host': account_config.get('ssh_host', 'github.com')
         }
+
+    def _get_ssh_url(self, repo_name: str, account_config: Dict[str, Any]) -> str:
+        """Generate SSH URL for repository using account-specific SSH host"""
+        config = self._get_account_config(account_config)
+        username = config['username']
+        ssh_host = config['ssh_host']
+
+        # Use organization if configured
+        owner = config['organization'] if config['create_org_repos'] else username
+
+        # Generate SSH URL: git@github.com-personal:username/repo.git
+        return f"git@{ssh_host}:{owner}/{repo_name}.git"
 
     def _get_github_token(self, account_config: Dict[str, Any]) -> Optional[str]:
         """Get GitHub token for specific account"""
@@ -237,13 +250,15 @@ class GitHubService:
 
             if response.status_code == 201:
                 repo_data = response.json()
-                clone_url = repo_data['clone_url']
+
+                # Use SSH URL instead of HTTPS for multi-account support
+                ssh_url = self._get_ssh_url(repo_name, account_config)
 
                 # Add remote to local repo
                 from .git_service import GitService
                 git_service = GitService(self.config)
 
-                if git_service.add_remote(repo_path, clone_url):
+                if git_service.add_remote(repo_path, ssh_url):
                     # Push initial content
                     if git_service.push_changes(repo_path):
                         logger.info(f"Created and pushed to GitHub repository: {repo_name} for {username}")

@@ -285,9 +285,12 @@ class GitService:
                 logger.warning(f"No remotes configured for {path}")
                 return False
 
-            # Push to origin
+            # Get current branch
+            current_branch = repo.active_branch.name
+
+            # Push to origin with upstream tracking
             origin = repo.remotes.origin
-            origin.push()
+            origin.push(refspec=f'{current_branch}:{current_branch}', set_upstream=True)
 
             logger.info(f"Pushed changes for {path}")
             return True

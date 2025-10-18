@@ -213,12 +213,12 @@ class Config:
                 logger.error(f"{path_name}: Missing 'path' field")
                 return False
 
-            if 'github' not in path_config:
-                logger.error(f"{path_name}: Missing 'github' configuration")
+            if 'account' not in path_config:
+                logger.error(f"{path_name}: Missing 'account' configuration")
                 return False
 
-            if 'username' not in path_config['github']:
-                logger.error(f"{path_name}: Missing 'github.username' field")
+            if 'username' not in path_config['account']:
+                logger.error(f"{path_name}: Missing 'account.username' field")
                 return False
 
             # Validate path exists
