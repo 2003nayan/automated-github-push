@@ -13,9 +13,15 @@ logger = logging.getLogger(__name__)
 class FolderWatcher:
     """Monitors filesystem for new folders"""
 
-    def __init__(self, config, on_new_folder_callback: Callable[[Path], None]):
+    def __init__(self, config, on_new_folder_callback: Callable[[Path], None], watched_path: Path = None):
         self.config = config
-        self.code_folder = config.get_path('paths.code_folder')
+        # Support both old single path and new multi-path configurations
+        if watched_path:
+            self.code_folder = watched_path
+        else:
+            # Fallback to old config for backward compatibility
+            self.code_folder = config.get_path('paths.code_folder')
+
         self.ignore_patterns = config.get('project_detection.ignore_patterns', [])
         self.on_new_folder_callback = on_new_folder_callback
 

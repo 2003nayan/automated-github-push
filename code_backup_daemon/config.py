@@ -21,23 +21,31 @@ class Config:
             'state_file': '~/.local/share/code-backup/state.json'
         },
         'paths': {
-            'code_folder': '/home/nayan-ai4m/Desktop/NK',
             'config_dir': '~/.config/code-backup',
             'data_dir': '~/.local/share/code-backup'
         },
-        'github': {
-            'username': '',
-            'default_visibility': 'private',  # private or public
-            'create_org_repos': False,
-            'organization': '',
-            'use_gh_cli': True  # Use gh CLI vs PyGithub
-        },
-        'git': {
-            'default_branch': 'main',
-            'auto_commit_message': 'Auto-backup: {timestamp}',
-            'pull_before_push': True,
-            'handle_conflicts': 'skip'  # skip, notify, or force
-        },
+        # NEW: Multi-account support - list of watched paths with account configs
+        'watched_paths': [
+            # Example structure (will be populated by setup wizard):
+            # {
+            #     'name': 'NK Projects',
+            #     'path': '/home/user/Desktop/NK',
+            #     'github': {
+            #         'username': '2003nayan',
+            #         'token_env_var': 'GITHUB_TOKEN_NK',  # Optional: env var for token
+            #         'default_visibility': 'private',
+            #         'create_org_repos': False,
+            #         'organization': '',
+            #         'use_gh_cli': False  # Use API with token for multi-account
+            #     },
+            #     'git': {
+            #         'default_branch': 'main',
+            #         'auto_commit_message': 'Auto-backup: {timestamp}',
+            #         'pull_before_push': True,
+            #         'handle_conflicts': 'skip'
+            #     }
+            # }
+        ],
         'project_detection': {
             'min_size_bytes': 1024,  # Minimum 1KB
             'project_indicators': [
@@ -94,6 +102,11 @@ class Config:
             try:
                 with open(self.config_path, 'r') as f:
                     user_config = yaml.safe_load(f) or {}
+
+                # Check if old format and migrate
+                if self._is_old_format(user_config):
+                    logger.info("Detected old configuration format, migrating to new format...")
+                    user_config = self._migrate_old_config(user_config)
 
                 # Merge with defaults
                 config = self._deep_merge(self.DEFAULT_CONFIG.copy(), user_config)
@@ -185,27 +198,144 @@ class Config:
 
     def validate(self) -> bool:
         """Validate configuration"""
-        required_fields = [
-            'paths.code_folder',
-            'github.username'
-        ]
+        watched_paths = self.get('watched_paths', [])
 
-        for field in required_fields:
-            if not self.get(field):
-                logger.error(f"Required configuration field missing: {field}")
-                return False
-
-        # Validate paths exist
-        try:
-            code_folder = self.get_path('paths.code_folder')
-            if not code_folder.exists():
-                logger.error(f"Code folder does not exist: {code_folder}")
-                return False
-        except Exception as e:
-            logger.error(f"Invalid code folder path: {e}")
+        if not watched_paths:
+            logger.error("No watched paths configured. Run 'code-backup setup' to configure.")
             return False
 
+        # Validate each watched path
+        for idx, path_config in enumerate(watched_paths):
+            path_name = path_config.get('name', f'Path #{idx + 1}')
+
+            # Check required fields
+            if 'path' not in path_config:
+                logger.error(f"{path_name}: Missing 'path' field")
+                return False
+
+            if 'github' not in path_config:
+                logger.error(f"{path_name}: Missing 'github' configuration")
+                return False
+
+            if 'username' not in path_config['github']:
+                logger.error(f"{path_name}: Missing 'github.username' field")
+                return False
+
+            # Validate path exists
+            try:
+                folder_path = Path(path_config['path']).expanduser().resolve()
+                if not folder_path.exists():
+                    logger.error(f"{path_name}: Path does not exist: {folder_path}")
+                    return False
+                if not folder_path.is_dir():
+                    logger.error(f"{path_name}: Path is not a directory: {folder_path}")
+                    return False
+            except Exception as e:
+                logger.error(f"{path_name}: Invalid path: {e}")
+                return False
+
         return True
+
+    def get_all_watched_paths(self) -> list:
+        """Get all watched path configurations"""
+        return self.get('watched_paths', [])
+
+    def get_path_config(self, repo_path: Path) -> Optional[Dict[str, Any]]:
+        """Get configuration for a specific repository path"""
+        repo_path_str = str(repo_path.resolve())
+
+        for path_config in self.get('watched_paths', []):
+            watched_path = Path(path_config['path']).expanduser().resolve()
+            watched_path_str = str(watched_path)
+
+            # Check if repo is under this watched path
+            if repo_path_str.startswith(watched_path_str):
+                return path_config
+
+        return None
+
+    def get_github_config_for_path(self, repo_path: Path) -> Optional[Dict[str, Any]]:
+        """Get GitHub configuration for a specific repository path"""
+        path_config = self.get_path_config(repo_path)
+        if path_config:
+            return path_config.get('github')
+        return None
+
+    def get_git_config_for_path(self, repo_path: Path) -> Optional[Dict[str, Any]]:
+        """Get Git configuration for a specific repository path"""
+        path_config = self.get_path_config(repo_path)
+        if path_config:
+            return path_config.get('git', {
+                'default_branch': 'main',
+                'auto_commit_message': 'Auto-backup: {timestamp}',
+                'pull_before_push': True,
+                'handle_conflicts': 'skip'
+            })
+        return None
+
+    def _is_old_format(self, config: Dict[str, Any]) -> bool:
+        """Check if configuration is in old single-account format"""
+        # Old format has 'paths.code_folder' and 'github.username' at root level
+        return ('paths' in config and 'code_folder' in config['paths']) or \
+               ('github' in config and 'username' in config.get('github', {}))
+
+    def _migrate_old_config(self, old_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate old single-account config to new multi-account format"""
+        logger.info("Migrating configuration from old format to new format")
+
+        # Extract old values
+        code_folder = old_config.get('paths', {}).get('code_folder', '')
+        github_config = old_config.get('github', {})
+        git_config = old_config.get('git', {})
+
+        # Create new watched_paths entry
+        watched_path_entry = {
+            'name': 'Default Projects',
+            'path': code_folder,
+            'github': {
+                'username': github_config.get('username', ''),
+                'token_env_var': None,
+                'default_visibility': github_config.get('default_visibility', 'private'),
+                'create_org_repos': github_config.get('create_org_repos', False),
+                'organization': github_config.get('organization', ''),
+                'use_gh_cli': github_config.get('use_gh_cli', True)
+            },
+            'git': {
+                'default_branch': git_config.get('default_branch', 'main'),
+                'auto_commit_message': git_config.get('auto_commit_message', 'Auto-backup: {timestamp}'),
+                'pull_before_push': git_config.get('pull_before_push', True),
+                'handle_conflicts': git_config.get('handle_conflicts', 'skip')
+            }
+        }
+
+        # Create new config structure
+        new_config = old_config.copy()
+
+        # Remove old structure
+        if 'paths' in new_config and 'code_folder' in new_config['paths']:
+            del new_config['paths']['code_folder']
+        if 'github' in new_config:
+            del new_config['github']
+        if 'git' in new_config:
+            del new_config['git']
+
+        # Add new structure
+        new_config['watched_paths'] = [watched_path_entry]
+
+        # Save migrated config
+        try:
+            backup_path = self.config_path.parent / f"{self.config_path.name}.old"
+            import shutil
+            shutil.copy(self.config_path, backup_path)
+            logger.info(f"Backed up old config to: {backup_path}")
+
+            with open(self.config_path, 'w') as f:
+                yaml.dump(new_config, f, default_flow_style=False, indent=2)
+            logger.info("Saved migrated configuration")
+        except Exception as e:
+            logger.error(f"Could not save migrated config: {e}")
+
+        return new_config
 
     def __str__(self) -> str:
         """String representation of config"""

@@ -28,11 +28,13 @@ class BackupService:
         self.tracked_repos: Dict[str, Dict[str, Any]] = {}
         self.is_running = False
         self.backup_thread: Optional[threading.Thread] = None
-        self.folder_watcher: Optional[FolderWatcher] = None
+
+        # Multi-path support: folder_watchers is now a list
+        self.folder_watchers: list[FolderWatcher] = []
 
         # Configuration
         self.backup_interval = config.get('daemon.backup_interval', 86400)  # 24 hours
-        self.code_folder = config.get_path('paths.code_folder')
+        self.watched_paths = config.get('paths.watched_paths', [])
 
         # Statistics
         self.stats = {
@@ -60,19 +62,19 @@ class BackupService:
             logger.error("Configuration validation failed")
             return
 
-        # Check GitHub authentication
-        if not self.github_service.is_authenticated():
-            logger.error("GitHub authentication failed. Please run 'gh auth login' or set GITHUB_TOKEN")
+        # Check GitHub authentication for all accounts
+        if not self._verify_all_accounts():
+            logger.error("GitHub authentication failed for one or more accounts")
             return
 
         self.is_running = True
         self.stats['start_time'] = datetime.now()
 
-        # Initial scan of existing folders
-        self.initial_scan()
+        # Initial scan of all watched paths
+        self.initial_scan_all()
 
-        # Start folder watcher
-        self.start_folder_watcher()
+        # Start folder watchers for all paths
+        self.start_all_folder_watchers()
 
         # Start backup loop
         self.start_backup_loop()
@@ -88,9 +90,10 @@ class BackupService:
 
         self.is_running = False
 
-        # Stop folder watcher
-        if self.folder_watcher:
-            self.folder_watcher.stop()
+        # Stop all folder watchers
+        for watcher in self.folder_watchers:
+            if watcher:
+                watcher.stop()
 
         # Wait for backup thread to finish
         if self.backup_thread and self.backup_thread.is_alive():
@@ -101,33 +104,69 @@ class BackupService:
 
         logger.info("Code Backup Service stopped")
 
-    def initial_scan(self):
-        """Scan existing folders and set up tracking"""
-        logger.info("Performing initial scan of code folder...")
+    def _verify_all_accounts(self) -> bool:
+        """Verify GitHub authentication for all configured accounts"""
+        all_authenticated = True
 
-        if not self.code_folder.exists():
-            logger.error(f"Code folder does not exist: {self.code_folder}")
+        for path_config in self.watched_paths:
+            account_config = path_config.get('account', {})
+            username = account_config.get('username')
+
+            if not self.github_service.is_authenticated(account_config):
+                logger.error(f"GitHub authentication failed for account: {username}")
+                all_authenticated = False
+
+        return all_authenticated
+
+    def initial_scan_all(self):
+        """Scan all watched paths and set up tracking"""
+        logger.info("Performing initial scan of all watched paths...")
+
+        if not self.watched_paths:
+            logger.warning("No watched paths configured")
             return
 
-        processed_count = 0
+        total_processed = 0
 
-        for item in self.code_folder.iterdir():
-            if item.is_dir() and not self._should_ignore_folder(item):
-                try:
-                    if self.process_folder(item, is_initial_scan=True):
-                        processed_count += 1
-                except Exception as e:
-                    logger.error(f"Error processing folder {item}: {e}")
+        for path_config in self.watched_paths:
+            code_folder = Path(path_config['path']).expanduser()
+            account_username = path_config.get('account', {}).get('username', 'unknown')
 
-        logger.info(f"Initial scan complete. Processed {processed_count} folders.")
+            logger.info(f"Scanning {code_folder} (account: {account_username})")
+
+            if not code_folder.exists():
+                logger.error(f"Code folder does not exist: {code_folder}")
+                continue
+
+            processed_count = 0
+
+            for item in code_folder.iterdir():
+                if item.is_dir() and not self._should_ignore_folder(item, path_config):
+                    try:
+                        if self.process_folder(item, path_config, is_initial_scan=True):
+                            processed_count += 1
+                    except Exception as e:
+                        logger.error(f"Error processing folder {item}: {e}")
+
+            logger.info(f"Scanned {code_folder}: {processed_count} folders processed")
+            total_processed += processed_count
+
+        logger.info(f"Initial scan complete. Total processed: {total_processed} folders.")
         self.save_state()
 
-    def process_folder(self, folder_path: Path, is_initial_scan: bool = False) -> bool:
+    def initial_scan(self):
+        """Deprecated: Use initial_scan_all() instead"""
+        logger.warning("initial_scan() is deprecated. Use initial_scan_all() for multi-account support.")
+        self.initial_scan_all()
+
+    def process_folder(self, folder_path: Path, path_config: dict, is_initial_scan: bool = False) -> bool:
         """Process a folder (existing or new)"""
         folder_str = str(folder_path)
         folder_name = folder_path.name
+        account_config = path_config.get('account', {})
+        account_username = account_config.get('username', 'unknown')
 
-        logger.debug(f"Processing folder: {folder_name}")
+        logger.debug(f"Processing folder: {folder_name} (account: {account_username})")
 
         # Skip if already tracked
         if folder_str in self.tracked_repos:
@@ -136,14 +175,16 @@ class BackupService:
 
         # Check if it's a git repository
         if self.git_service.is_git_repo(folder_path):
-            return self._process_existing_git_repo(folder_path, is_initial_scan)
+            return self._process_existing_git_repo(folder_path, path_config, is_initial_scan)
         else:
-            return self._process_non_git_folder(folder_path, is_initial_scan)
+            return self._process_non_git_folder(folder_path, path_config, is_initial_scan)
 
-    def _process_existing_git_repo(self, folder_path: Path, is_initial_scan: bool) -> bool:
+    def _process_existing_git_repo(self, folder_path: Path, path_config: dict, is_initial_scan: bool) -> bool:
         """Process existing git repository"""
         folder_str = str(folder_path)
         folder_name = folder_path.name
+        account_config = path_config.get('account', {})
+        account_username = account_config.get('username', 'unknown')
 
         # Check if it has a remote
         if self.git_service.has_remote(folder_path):
@@ -156,10 +197,11 @@ class BackupService:
                 'backup_count': 0,
                 'status': 'tracked',
                 'has_remote': True,
-                'remote_url': self.git_service.get_remote_url(folder_path)
+                'remote_url': self.git_service.get_remote_url(folder_path),
+                'account_username': account_username
             }
 
-            logger.info(f"Now tracking existing repository: {folder_name}")
+            logger.info(f"Now tracking existing repository: {folder_name} (account: {account_username})")
 
             # Perform initial backup if needed
             if not is_initial_scan:
@@ -168,27 +210,33 @@ class BackupService:
             return True
         else:
             # Git repo without remote - create GitHub repo
-            return self._add_remote_to_existing_repo(folder_path)
+            return self._add_remote_to_existing_repo(folder_path, path_config)
 
-    def _process_non_git_folder(self, folder_path: Path, is_initial_scan: bool) -> bool:
+    def _process_non_git_folder(self, folder_path: Path, path_config: dict, is_initial_scan: bool) -> bool:
         """Process folder that is not a git repository"""
         # Check if it's a valid project
-        if not self._is_valid_project(folder_path):
+        if not self._is_valid_project(folder_path, path_config):
             logger.debug(f"Not a valid project: {folder_path.name}")
             return False
 
-        return self._initialize_new_repository(folder_path)
+        return self._initialize_new_repository(folder_path, path_config)
 
-    def _add_remote_to_existing_repo(self, folder_path: Path) -> bool:
+    def _add_remote_to_existing_repo(self, folder_path: Path, path_config: dict) -> bool:
         """Add GitHub remote to existing git repository"""
         folder_name = folder_path.name
+        account_config = path_config.get('account', {})
+        account_username = account_config.get('username', 'unknown')
 
-        logger.info(f"Adding GitHub remote to existing repository: {folder_name}")
+        logger.info(f"Adding GitHub remote to existing repository: {folder_name} (account: {account_username})")
+
+        # Set git config for this repository (user.name and user.email)
+        email = account_config.get('email', f"{account_username}@users.noreply.github.com")
+        self.git_service.set_repo_git_config(folder_path, account_username, email)
 
         # Create GitHub repository
         description = self.github_service.generate_repo_description(folder_path)
 
-        if self.github_service.create_repository(folder_name, folder_path, description):
+        if self.github_service.create_repository(folder_name, folder_path, description, account_config):
             # Track the repository
             self.tracked_repos[str(folder_path)] = {
                 'name': folder_name,
@@ -198,7 +246,8 @@ class BackupService:
                 'backup_count': 1,
                 'status': 'synced',
                 'has_remote': True,
-                'remote_url': self.git_service.get_remote_url(folder_path)
+                'remote_url': self.git_service.get_remote_url(folder_path),
+                'account_username': account_username
             }
 
             self.stats['repos_created'] += 1
@@ -208,21 +257,27 @@ class BackupService:
             logger.error(f"Failed to add remote to repository: {folder_name}")
             return False
 
-    def _initialize_new_repository(self, folder_path: Path) -> bool:
+    def _initialize_new_repository(self, folder_path: Path, path_config: dict) -> bool:
         """Initialize new git repository and create GitHub repo"""
         folder_name = folder_path.name
+        account_config = path_config.get('account', {})
+        account_username = account_config.get('username', 'unknown')
 
-        logger.info(f"Initializing new repository: {folder_name}")
+        logger.info(f"Initializing new repository: {folder_name} (account: {account_username})")
 
         # Initialize git repository
         if not self.git_service.init_repo(folder_path):
             logger.error(f"Failed to initialize git repository: {folder_name}")
             return False
 
+        # Set git config for this repository (user.name and user.email)
+        email = account_config.get('email', f"{account_username}@users.noreply.github.com")
+        self.git_service.set_repo_git_config(folder_path, account_username, email)
+
         # Create GitHub repository
         description = self.github_service.generate_repo_description(folder_path)
 
-        if self.github_service.create_repository(folder_name, folder_path, description):
+        if self.github_service.create_repository(folder_name, folder_path, description, account_config):
             # Track the repository
             self.tracked_repos[str(folder_path)] = {
                 'name': folder_name,
@@ -232,7 +287,8 @@ class BackupService:
                 'backup_count': 1,
                 'status': 'synced',
                 'has_remote': True,
-                'remote_url': self.git_service.get_remote_url(folder_path)
+                'remote_url': self.git_service.get_remote_url(folder_path),
+                'account_username': account_username
             }
 
             self.stats['repos_created'] += 1
@@ -242,25 +298,46 @@ class BackupService:
             logger.error(f"Failed to create GitHub repository: {folder_name}")
             return False
 
+    def start_all_folder_watchers(self):
+        """Start monitoring all watched paths"""
+        for path_config in self.watched_paths:
+            try:
+                code_folder = Path(path_config['path']).expanduser()
+                account_username = path_config.get('account', {}).get('username', 'unknown')
+
+                logger.info(f"Starting folder watcher for {code_folder} (account: {account_username})")
+
+                # Create callback with path_config bound
+                def make_callback(pc):
+                    def callback(folder_path):
+                        self.on_new_folder_detected(folder_path, pc)
+                    return callback
+
+                watcher = FolderWatcher(
+                    self.config,
+                    make_callback(path_config),
+                    watched_path=code_folder
+                )
+                watcher.start()
+                self.folder_watchers.append(watcher)
+
+            except Exception as e:
+                logger.error(f"Failed to start folder watcher for {code_folder}: {e}")
+
     def start_folder_watcher(self):
-        """Start monitoring for new folders"""
-        try:
-            self.folder_watcher = FolderWatcher(
-                self.config,
-                self.on_new_folder_detected
-            )
-            self.folder_watcher.start()
-        except Exception as e:
-            logger.error(f"Failed to start folder watcher: {e}")
+        """Deprecated: Use start_all_folder_watchers() instead"""
+        logger.warning("start_folder_watcher() is deprecated. Use start_all_folder_watchers() for multi-account support.")
+        self.start_all_folder_watchers()
 
-    def on_new_folder_detected(self, folder_path: Path):
+    def on_new_folder_detected(self, folder_path: Path, path_config: dict):
         """Callback for when folder watcher detects a new folder"""
-        logger.info(f"New folder detected by watcher: {folder_path.name}")
+        account_username = path_config.get('account', {}).get('username', 'unknown')
+        logger.info(f"New folder detected by watcher: {folder_path.name} (account: {account_username})")
 
         try:
-            if self.process_folder(folder_path):
+            if self.process_folder(folder_path, path_config):
                 self.save_state()
-                self._send_notification(f"New repository created: {folder_path.name}")
+                self._send_notification(f"New repository created: {folder_path.name} (account: {account_username})")
         except Exception as e:
             logger.error(f"Error processing new folder {folder_path}: {e}")
 
@@ -376,23 +453,19 @@ class BackupService:
             self.backup_all_repositories()
             return True
 
-    def _is_valid_project(self, folder_path: Path) -> bool:
+    def _is_valid_project(self, folder_path: Path, path_config: dict = None) -> bool:
         """Check if folder is a valid project (using folder watcher logic)"""
-        if not self.folder_watcher:
-            # Create a temporary watcher for validation
-            temp_watcher = FolderWatcher(self.config, lambda x: None)
-            return temp_watcher.is_valid_project(folder_path)
-        else:
-            return self.folder_watcher.is_valid_project(folder_path)
+        # Always create a temporary watcher for validation (stateless check)
+        watched_path = Path(path_config['path']).expanduser() if path_config else None
+        temp_watcher = FolderWatcher(self.config, lambda x: None, watched_path=watched_path)
+        return temp_watcher.is_valid_project(folder_path)
 
-    def _should_ignore_folder(self, folder_path: Path) -> bool:
+    def _should_ignore_folder(self, folder_path: Path, path_config: dict = None) -> bool:
         """Check if folder should be ignored"""
-        if not self.folder_watcher:
-            # Create a temporary watcher for validation
-            temp_watcher = FolderWatcher(self.config, lambda x: None)
-            return temp_watcher.should_ignore_folder(folder_path)
-        else:
-            return self.folder_watcher.should_ignore_folder(folder_path)
+        # Always create a temporary watcher for validation (stateless check)
+        watched_path = Path(path_config['path']).expanduser() if path_config else None
+        temp_watcher = FolderWatcher(self.config, lambda x: None, watched_path=watched_path)
+        return temp_watcher.should_ignore_folder(folder_path)
 
     def _send_notification(self, message: str):
         """Send notification (placeholder for future implementation)"""
@@ -407,15 +480,16 @@ class BackupService:
             'stats': self.stats.copy(),
             'tracked_repos': len(self.tracked_repos),
             'config': {
-                'code_folder': str(self.code_folder),
-                'backup_interval': self.backup_interval,
-                'github_username': self.config.get('github.username')
+                'watched_paths': [str(Path(pc['path']).expanduser()) for pc in self.watched_paths],
+                'backup_interval': self.backup_interval
             }
         }
 
-        # Add folder watcher status
-        if self.folder_watcher:
-            status['folder_watcher'] = self.folder_watcher.get_status()
+        # Add folder watchers status
+        status['folder_watchers'] = []
+        for watcher in self.folder_watchers:
+            if watcher:
+                status['folder_watchers'].append(watcher.get_status())
 
         # Add repository details
         status['repositories'] = []

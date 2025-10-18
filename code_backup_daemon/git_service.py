@@ -111,6 +111,34 @@ class GitService:
 
         logger.debug(f"Created .gitignore at {gitignore_path}")
 
+    def set_repo_git_config(self, path: Path, username: str, email: str) -> bool:
+        """Set git user config for specific repository
+
+        This allows commits from different repositories to be attributed
+        to the correct GitHub account when using multiple accounts.
+
+        Args:
+            path: Path to the git repository
+            username: Git user.name (typically GitHub username)
+            email: Git user.email
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            repo = Repo(path)
+
+            with repo.config_writer() as config_writer:
+                config_writer.set_value("user", "name", username)
+                config_writer.set_value("user", "email", email)
+
+            logger.info(f"Set git config for {path}: {username} <{email}>")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set git config for {path}: {e}")
+            return False
+
     def has_remote(self, path: Path) -> bool:
         """Check if repository has remote configured"""
         try:

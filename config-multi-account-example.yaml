@@ -1,0 +1,156 @@
+# Code Backup Daemon - Multi-Account Configuration Example
+# This file shows how to configure multiple folders with different GitHub accounts
+
+# Daemon settings (shared across all accounts)
+daemon:
+  backup_interval: 86400  # 24 hours in seconds
+  log_level: INFO
+  pid_file: ~/.local/share/code-backup/daemon.pid
+  log_file: ~/.local/share/code-backup/daemon.log
+  state_file: ~/.local/share/code-backup/state.json
+
+# Path configuration (global)
+paths:
+  config_dir: ~/.config/code-backup
+  data_dir: ~/.local/share/code-backup
+
+# Multi-Account Configuration: List of watched paths
+# Each entry can have its own GitHub account and settings
+watched_paths:
+  # First Account Configuration
+  - name: "NK Projects"
+    path: /home/nayan-ai4m/Desktop/NK
+    github:
+      username: "2003nayan"
+      # Option 1: Use environment variable for token (RECOMMENDED for multi-account)
+      token_env_var: "GITHUB_TOKEN_NK"
+      # Option 2: Use gh CLI (only works for one account at a time)
+      use_gh_cli: false  # Set to false when using token_env_var
+      default_visibility: private  # or 'public'
+      create_org_repos: false
+      organization: ""  # If create_org_repos is true, specify org name
+    git:
+      default_branch: main
+      auto_commit_message: "Auto-backup: {timestamp}"
+      pull_before_push: true
+      handle_conflicts: skip  # skip, notify, or force
+
+  # Second Account Configuration
+  - name: "AI4M Projects"
+    path: /home/nayan-ai4m/Desktop/AI4M
+    github:
+      username: "nayan-ai4m"
+      token_env_var: "GITHUB_TOKEN_AI4M"
+      use_gh_cli: false
+      default_visibility: private
+      create_org_repos: false
+      organization: ""
+    git:
+      default_branch: main
+      auto_commit_message: "Auto-backup: {timestamp}"
+      pull_before_push: true
+      handle_conflicts: skip
+
+  # You can add more accounts as needed:
+  # - name: "Work Projects"
+  #   path: /home/user/work
+  #   github:
+  #     username: "work-account"
+  #     token_env_var: "GITHUB_TOKEN_WORK"
+  #     ...
+
+# Project detection settings (shared across all accounts)
+project_detection:
+  min_size_bytes: 1024  # Minimum 1KB
+  project_indicators:
+    - package.json
+    - requirements.txt
+    - Cargo.toml
+    - go.mod
+    - pom.xml
+    - Gemfile
+    - composer.json
+    - setup.py
+    - pyproject.toml
+    - README.md
+    - Makefile
+  code_extensions:
+    - .py
+    - .js
+    - .ts
+    - .jsx
+    - .tsx
+    - .java
+    - .cpp
+    - .c
+    - .h
+    - .go
+    - .rs
+    - .php
+    - .rb
+    - .swift
+    - .kt
+    - .cs
+    - .scala
+    - .clj
+    - .hs
+    - .elm
+  ignore_patterns:
+    - node_modules
+    - venv
+    - .venv
+    - env
+    - __pycache__
+    - .cache
+    - dist
+    - build
+    - target
+    - .git
+    - .svn
+    - .idea
+    - .vscode
+    - tmp
+    - temp
+    - .DS_Store
+
+# Notification settings (shared)
+notifications:
+  enabled: true
+  on_error: true
+  on_new_repo: true
+  on_backup_complete: false
+
+# =============================================================================
+# SETUP INSTRUCTIONS:
+# =============================================================================
+#
+# 1. Copy this file to ~/.config/code-backup/config.yaml
+#
+# 2. Create GitHub Personal Access Tokens:
+#    - Go to https://github.com/settings/tokens
+#    - Create a token for each account with 'repo' scope
+#    - Name them descriptively (e.g., "Code Backup Daemon - NK Projects")
+#
+# 3. Set environment variables:
+#    Add to your ~/.bashrc or ~/.zshrc:
+#
+#    export GITHUB_TOKEN_NK="ghp_xxxxxxxxxxxxxxxxxxxx"
+#    export GITHUB_TOKEN_AI4M="ghp_yyyyyyyyyyyyyyyyyyyy"
+#
+#    Then run: source ~/.bashrc
+#
+# 4. For systemd service, create ~/.config/code-backup/tokens.env:
+#
+#    GITHUB_TOKEN_NK=ghp_xxxxxxxxxxxxxxxxxxxx
+#    GITHUB_TOKEN_AI4M=ghp_yyyyyyyyyyyyyyyyyyyy
+#
+#    And update the service file to load it:
+#    EnvironmentFile=%h/.config/code-backup/tokens.env
+#
+# 5. Verify configuration:
+#    code-backup config-show
+#
+# 6. Start the daemon:
+#    code-backup start
+#
+# =============================================================================

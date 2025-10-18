@@ -85,9 +85,18 @@ def start(ctx):
 
         if service.is_running:
             click.echo("✅ Code Backup Daemon started successfully")
-            click.echo(f"📁 Monitoring: {config.get_path('paths.code_folder')}")
-            click.echo(f"⏰ Backup interval: {config.get('daemon.backup_interval')}s")
-            click.echo("Press Ctrl+C to stop")
+
+            # Show all watched paths with their associated accounts
+            watched_paths = config.get('paths.watched_paths', [])
+            if watched_paths:
+                click.echo(f"\n📁 Monitoring {len(watched_paths)} path(s):")
+                for path_config in watched_paths:
+                    path = path_config['path']
+                    account = path_config.get('account', {}).get('username', 'unknown')
+                    click.echo(f"   • {path} → {account}")
+
+            click.echo(f"\n⏰ Backup interval: {config.get('daemon.backup_interval')}s")
+            click.echo("\nPress Ctrl+C to stop")
 
             # Keep the main thread alive
             try:
@@ -170,10 +179,23 @@ def status(ctx):
     else:
         click.echo("🔴 Status: Stopped")
 
-    # Show configuration
-    click.echo(f"📁 Code Folder: {config.get_path('paths.code_folder')}")
-    click.echo(f"👤 GitHub User: {config.get('github.username')}")
-    click.echo(f"⏰ Backup Interval: {config.get('daemon.backup_interval')}s")
+    # Show configuration - multi-account support
+    watched_paths = config.get('paths.watched_paths', [])
+    if watched_paths:
+        click.echo(f"\n📁 Watched Paths: {len(watched_paths)}")
+        for idx, path_config in enumerate(watched_paths, 1):
+            path = path_config['path']
+            account = path_config.get('account', {}).get('username', 'unknown')
+            click.echo(f"   {idx}. {path}")
+            click.echo(f"      GitHub Account: {account}")
+    else:
+        # Fallback for old config format
+        code_folder = config.get('paths.code_folder', 'Not configured')
+        github_user = config.get('github.username', 'Not configured')
+        click.echo(f"📁 Code Folder: {code_folder}")
+        click.echo(f"👤 GitHub User: {github_user}")
+
+    click.echo(f"\n⏰ Backup Interval: {config.get('daemon.backup_interval')}s")
 
     # Show state information
     state_file = config.get_path('daemon.state_file')
@@ -185,8 +207,20 @@ def status(ctx):
             tracked_repos = state.get('tracked_repos', {})
             stats = state.get('stats', {})
 
-            click.echo(f"📚 Tracked Repositories: {len(tracked_repos)}")
-            click.echo(f"✅ Successful Backups: {stats.get('successful_backups', 0)}")
+            # Group repos by account
+            repos_by_account = {}
+            for repo_path, repo_info in tracked_repos.items():
+                account = repo_info.get('account_username', 'unknown')
+                if account not in repos_by_account:
+                    repos_by_account[account] = []
+                repos_by_account[account].append(repo_info)
+
+            click.echo(f"\n📚 Tracked Repositories: {len(tracked_repos)}")
+            if repos_by_account:
+                for account, repos in sorted(repos_by_account.items()):
+                    click.echo(f"   {account}: {len(repos)} repo(s)")
+
+            click.echo(f"\n✅ Successful Backups: {stats.get('successful_backups', 0)}")
             click.echo(f"❌ Failed Backups: {stats.get('failed_backups', 0)}")
 
             last_backup = stats.get('last_backup_time')
@@ -198,8 +232,9 @@ def status(ctx):
 
 
 @cli.command()
-@click.pass_context  
-def list_repos(ctx):
+@click.option('--account', '-a', help='Filter by GitHub account')
+@click.pass_context
+def list_repos(ctx, account):
     """List tracked repositories"""
     config = ctx.obj['config']
     state_file = config.get_path('daemon.state_file')
@@ -218,35 +253,61 @@ def list_repos(ctx):
             click.echo("📝 No repositories are currently tracked")
             return
 
-        click.echo(f"📚 Tracked Repositories ({len(tracked_repos)})")
+        # Filter by account if specified
+        if account:
+            tracked_repos = {
+                path: info for path, info in tracked_repos.items()
+                if info.get('account_username') == account
+            }
+            if not tracked_repos:
+                click.echo(f"📝 No repositories found for account '{account}'")
+                return
+            click.echo(f"📚 Repositories for account '{account}' ({len(tracked_repos)})")
+        else:
+            click.echo(f"📚 All Tracked Repositories ({len(tracked_repos)})")
+
         click.echo("=" * 50)
 
+        # Group by account for better organization
+        repos_by_account = {}
         for repo_path, repo_info in tracked_repos.items():
-            name = repo_info.get('name', 'Unknown')
-            status = repo_info.get('status', 'unknown')
-            last_backup = repo_info.get('last_backup', 'Never')
-            backup_count = repo_info.get('backup_count', 0)
+            acc = repo_info.get('account_username', 'unknown')
+            if acc not in repos_by_account:
+                repos_by_account[acc] = []
+            repos_by_account[acc].append((repo_path, repo_info))
 
-            # Status emoji
-            status_emoji = {
-                'synced': '✅',
-                'failed': '❌', 
-                'missing': '⚠️',
-                'error': '🔴',
-                'tracked': '📝'
-            }.get(status, '❓')
+        for acc, repos in sorted(repos_by_account.items()):
+            if not account:  # Only show account headers when not filtering
+                click.echo(f"\n👤 Account: {acc} ({len(repos)} repo(s))")
+                click.echo("-" * 50)
 
-            click.echo(f"{status_emoji} {name}")
-            click.echo(f"   Path: {repo_path}")
-            click.echo(f"   Status: {status}")
-            click.echo(f"   Backups: {backup_count}")
-            if last_backup != 'Never':
-                try:
-                    backup_time = datetime.fromisoformat(last_backup)
-                    click.echo(f"   Last Backup: {backup_time.strftime('%Y-%m-%d %H:%M:%S')}")
-                except:
-                    click.echo(f"   Last Backup: {last_backup}")
-            click.echo()
+            for repo_path, repo_info in repos:
+                name = repo_info.get('name', 'Unknown')
+                status = repo_info.get('status', 'unknown')
+                last_backup = repo_info.get('last_backup', 'Never')
+                backup_count = repo_info.get('backup_count', 0)
+
+                # Status emoji
+                status_emoji = {
+                    'synced': '✅',
+                    'failed': '❌',
+                    'missing': '⚠️',
+                    'error': '🔴',
+                    'tracked': '📝'
+                }.get(status, '❓')
+
+                click.echo(f"\n{status_emoji} {name}")
+                click.echo(f"   Path: {repo_path}")
+                if account:  # Show account when filtering (redundant otherwise)
+                    click.echo(f"   Account: {acc}")
+                click.echo(f"   Status: {status}")
+                click.echo(f"   Backups: {backup_count}")
+                if last_backup != 'Never':
+                    try:
+                        backup_time = datetime.fromisoformat(last_backup)
+                        click.echo(f"   Last Backup: {backup_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    except:
+                        click.echo(f"   Last Backup: {last_backup}")
 
     except Exception as e:
         click.echo(f"❌ Error reading repositories: {e}", err=True)
