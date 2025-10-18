@@ -87,7 +87,7 @@ def start(ctx):
             click.echo("✅ Code Backup Daemon started successfully")
 
             # Show all watched paths with their associated accounts
-            watched_paths = config.get('paths.watched_paths', [])
+            watched_paths = config.get('watched_paths', [])
             if watched_paths:
                 click.echo(f"\n📁 Monitoring {len(watched_paths)} path(s):")
                 for path_config in watched_paths:

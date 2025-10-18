@@ -34,7 +34,7 @@ class BackupService:
 
         # Configuration
         self.backup_interval = config.get('daemon.backup_interval', 86400)  # 24 hours
-        self.watched_paths = config.get('paths.watched_paths', [])
+        self.watched_paths = config.get('watched_paths', [])
 
         # Statistics
         self.stats = {
