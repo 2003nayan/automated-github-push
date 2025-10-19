@@ -36,6 +36,9 @@ class BackupService:
         self.backup_interval = config.get('daemon.backup_interval', 86400)  # 24 hours
         self.watched_paths = config.get('watched_paths', [])
 
+        # WebSocket handler for UI (set by web server)
+        self.websocket_handler = None
+
         # Statistics
         self.stats = {
             'total_repos': 0,
@@ -48,6 +51,16 @@ class BackupService:
 
         # Load existing state
         self.load_state()
+
+    @property
+    def repositories(self):
+        """Alias for tracked_repos for API compatibility"""
+        return self.tracked_repos
+
+    @property
+    def running(self):
+        """Alias for is_running for API compatibility"""
+        return self.is_running
 
     def start(self):
         """Start the backup service"""
@@ -338,6 +351,12 @@ class BackupService:
             if self.process_folder(folder_path, path_config):
                 self.save_state()
                 self._send_notification(f"New repository created: {folder_path.name} (account: {account_username})")
+
+                # Notify WebSocket clients of new project
+                if self.websocket_handler:
+                    self.websocket_handler.broadcast_project_detected(
+                        folder_path.name, account_username
+                    )
         except Exception as e:
             logger.error(f"Error processing new folder {folder_path}: {e}")
 
@@ -375,9 +394,18 @@ class BackupService:
 
         successful = 0
         failed = 0
+        skipped = 0
 
         for repo_path, repo_info in self.tracked_repos.items():
             try:
+                repo_name = repo_info.get('name', Path(repo_path).name)
+
+                # SKIP DISABLED PROJECTS
+                if not self.config.get_project_enabled(repo_name):
+                    logger.debug(f"Skipping disabled project: {repo_name}")
+                    skipped += 1
+                    continue
+
                 path = Path(repo_path)
 
                 # Check if folder still exists
@@ -404,8 +432,8 @@ class BackupService:
         self.stats['successful_backups'] += successful
         self.stats['failed_backups'] += failed
 
-        if successful > 0 or failed > 0:
-            logger.info(f"Backup completed: {successful} successful, {failed} failed")
+        if successful > 0 or failed > 0 or skipped > 0:
+            logger.info(f"Backup completed: {successful} successful, {failed} failed, {skipped} skipped")
 
             if failed > 0:
                 self._send_notification(f"Backup completed with {failed} failures")
@@ -414,25 +442,80 @@ class BackupService:
         self.save_state()
 
     def _backup_repository(self, repo_path: Path) -> bool:
-        """Backup a single repository"""
+        """Backup a single repository (internal method)"""
         try:
+            repo_name = repo_path.name
+
+            # Notify WebSocket clients that backup started
+            if self.websocket_handler:
+                self.websocket_handler.broadcast_backup_started(repo_name)
+
             # Check for changes
             if not self.git_service.has_uncommitted_changes(repo_path):
-                logger.debug(f"No changes to backup in {repo_path.name}")
+                logger.debug(f"No changes to backup in {repo_name}")
+                # Notify success (no changes)
+                if self.websocket_handler:
+                    self.websocket_handler.broadcast_backup_completed(repo_name, True)
                 return True
 
-            logger.info(f"Backing up {repo_path.name}...")
+            logger.info(f"Backing up {repo_name}...")
 
             # Sync repository (commit, pull, push)
-            if self.git_service.sync_repository(repo_path):
-                logger.debug(f"Successfully backed up {repo_path.name}")
-                return True
+            success = self.git_service.sync_repository(repo_path)
+
+            # Notify WebSocket clients of completion
+            if self.websocket_handler:
+                if success:
+                    self.websocket_handler.broadcast_backup_completed(repo_name, True)
+                else:
+                    self.websocket_handler.broadcast_backup_completed(
+                        repo_name, False, "Sync failed"
+                    )
+
+            if success:
+                logger.debug(f"Successfully backed up {repo_name}")
             else:
-                logger.warning(f"Failed to backup {repo_path.name}")
-                return False
+                logger.warning(f"Failed to backup {repo_name}")
+
+            return success
 
         except Exception as e:
             logger.error(f"Error backing up {repo_path}: {e}")
+            # Notify WebSocket clients of error
+            if self.websocket_handler:
+                self.websocket_handler.broadcast_backup_completed(
+                    repo_path.name, False, str(e)
+                )
+            return False
+
+    def backup_repository(self, repo_name: str) -> bool:
+        """Public method to backup a specific repository by name"""
+        try:
+            # Find repository by name
+            for repo_path, repo_info in self.tracked_repos.items():
+                if repo_info.get('name') == repo_name or Path(repo_path).name == repo_name:
+                    path = Path(repo_path)
+
+                    if not path.exists():
+                        logger.error(f"Repository path no longer exists: {repo_path}")
+                        return False
+
+                    logger.info(f"Manual backup triggered for {repo_name}")
+                    success = self._backup_repository(path)
+
+                    if success:
+                        repo_info['last_backup'] = datetime.now().isoformat()
+                        repo_info['backup_count'] = repo_info.get('backup_count', 0) + 1
+                        repo_info['status'] = 'synced'
+                        self.save_state()
+
+                    return success
+
+            logger.error(f"Repository not found: {repo_name}")
+            return False
+
+        except Exception as e:
+            logger.error(f"Error in backup_repository for {repo_name}: {e}")
             return False
 
     def force_backup(self, repo_name: Optional[str] = None) -> bool:

@@ -27,6 +27,56 @@ def setup_logging(log_level):
     )
 
 
+def start_web_ui(service, config):
+    """Start web UI in a separate thread
+
+    Args:
+        service: BackupService instance
+        config: Config instance
+
+    Returns:
+        Thread object running the web server
+    """
+    import threading
+
+    try:
+        from .web.server import create_app
+        from .web.websocket import WebSocketHandler
+
+        click.echo("🌐 Starting Web UI...")
+
+        app, socketio = create_app(service)
+        service.websocket_handler = WebSocketHandler(socketio)
+
+        host = config.get('ui.host', '127.0.0.1')
+        port = config.get('ui.port', 5000)
+
+        def run_web_server():
+            # Use eventlet for production-ready async support
+            socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True, log_output=False)
+
+        web_thread = threading.Thread(target=run_web_server, daemon=True)
+        web_thread.start()
+
+        click.echo(f"✅ Web UI started at http://{host}:{port}")
+
+        # Open browser if configured
+        if config.get('ui.auto_open_browser', False):
+            try:
+                import webbrowser
+                webbrowser.open(f"http://{host}:{port}")
+                click.echo(f"🌐 Opened browser at http://{host}:{port}")
+            except Exception as e:
+                click.echo(f"⚠️  Could not auto-open browser: {e}")
+
+        return web_thread
+
+    except Exception as e:
+        click.echo(f"⚠️  Failed to start web UI: {e}")
+        click.echo("   Daemon will continue running without UI")
+        return None
+
+
 @click.group()
 @click.option('--config', '-c', help='Configuration file path')
 @click.option('--log-level', default='INFO', help='Log level (DEBUG, INFO, WARNING, ERROR)')
@@ -47,8 +97,9 @@ def cli(ctx, config, log_level):
 
 
 @cli.command()
+@click.option('--no-ui', is_flag=True, help='Start without web UI')
 @click.pass_context
-def start(ctx):
+def start(ctx, no_ui):
     """Start the backup daemon"""
     config = ctx.obj['config']
 
@@ -62,6 +113,11 @@ def start(ctx):
 
     # Start the service
     service = BackupService(config)
+
+    # Start web UI if enabled
+    web_thread = None
+    if not no_ui and config.get('ui.enabled', True):
+        web_thread = start_web_ui(service, config)
 
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):

@@ -13,3 +13,10 @@ flake8>=5.0.0
 # Optional dependencies for enhanced features
 colorama>=0.4.6  # Colored terminal output
 rich>=13.0.0     # Rich terminal formatting
+
+# Web UI dependencies
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-socketio>=5.3.5
+python-socketio>=5.10.0
+eventlet>=0.33.0  # Async support for SocketIO

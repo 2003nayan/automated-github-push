@@ -69,7 +69,15 @@ class Config:
             'on_error': True,
             'on_new_repo': True,
             'on_backup_complete': False
-        }
+        },
+        'ui': {
+            'enabled': True,
+            'host': '127.0.0.1',
+            'port': 5000,
+            'auto_open_browser': True,
+            'theme': 'dark'
+        },
+        'project_preferences': {}  # Stores per-project settings (enabled/disabled)
     }
 
     def __init__(self, config_path: Optional[str] = None):
@@ -336,6 +344,20 @@ class Config:
             logger.error(f"Could not save migrated config: {e}")
 
         return new_config
+
+    def get_project_enabled(self, repo_name: str) -> bool:
+        """Check if project sync is enabled (default: True)"""
+        return self.config.get('project_preferences', {}).get(repo_name, {}).get('enabled', True)
+
+    def set_project_enabled(self, repo_name: str, enabled: bool):
+        """Enable/disable project sync"""
+        if 'project_preferences' not in self.config:
+            self.config['project_preferences'] = {}
+        if repo_name not in self.config['project_preferences']:
+            self.config['project_preferences'][repo_name] = {}
+        self.config['project_preferences'][repo_name]['enabled'] = enabled
+        self.save()
+        logger.info(f"Project '{repo_name}' sync {'enabled' if enabled else 'disabled'}")
 
     def __str__(self) -> str:
         """String representation of config"""
