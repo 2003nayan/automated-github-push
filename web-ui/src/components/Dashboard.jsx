@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { projectsApi, statusApi, accountsApi } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useTheme } from '../hooks/useTheme';
 import { StatusBar } from './StatusBar';
 import { AccountSection } from './AccountSection';
-import { Github, RefreshCw, Loader2 } from 'lucide-react';
+import { GitBranch, RefreshCw, Loader2, Sun, Moon } from 'lucide-react';
 
 export const Dashboard = () => {
   const [projects, setProjects] = useState([]);
@@ -12,6 +13,7 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { connected, events } = useWebSocket();
+  const { theme, toggleTheme } = useTheme();
 
   // Fetch initial data
   useEffect(() => {
@@ -81,10 +83,10 @@ export const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-dark-bg">
+      <div className="flex items-center justify-center min-h-screen bg-neutral-50 dark:bg-neutral-900">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-primary-500 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-accent-500 mx-auto mb-4" />
+          <p className="text-neutral-600 dark:text-neutral-400">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -92,18 +94,18 @@ export const Dashboard = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-dark-bg">
+      <div className="flex items-center justify-center min-h-screen bg-neutral-50 dark:bg-neutral-900">
         <div className="text-center max-w-md p-6">
-          <div className="text-red-500 mb-4">
+          <div className="text-error mb-4">
             <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Connection Error</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+          <h2 className="text-xl font-bold mb-2 text-neutral-950 dark:text-neutral-50">Connection Error</h2>
+          <p className="text-neutral-600 dark:text-neutral-400 mb-4">{error}</p>
           <button
             onClick={fetchData}
-            className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+            className="px-4 py-2 bg-accent-500 text-white rounded-lg hover:bg-accent-600 transition-all active:scale-95"
           >
             Retry
           </button>
@@ -113,32 +115,52 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-bg">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900">
       {/* Header */}
-      <header className="bg-white dark:bg-dark-card shadow-md border-b border-gray-200 dark:border-dark-border">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Github className="w-8 h-8 text-primary-500" />
-              <h1 className="text-2xl font-bold">Code Backup Dashboard</h1>
+      <header className="sticky top-0 z-50 bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 shadow-minimal">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-accent-500 to-accent-600 rounded-lg flex items-center justify-center shadow-sm">
+                <GitBranch className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-neutral-950 dark:text-neutral-50 tracking-tight">
+                  Code Backup
+                </h1>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">Automated repository sync</p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {/* WebSocket Status */}
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  {connected ? 'Connected' : 'Disconnected'}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600">
+                <div className={`status-indicator ${connected ? 'bg-success' : 'bg-danger'}`} />
+                <span className="text-xs font-medium text-neutral-700 dark:text-neutral-200">
+                  {connected ? 'Live' : 'Offline'}
                 </span>
               </div>
+
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-600 active:scale-95 transition-all"
+                title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              >
+                {theme === 'light' ? (
+                  <Moon className="w-4 h-4 text-neutral-700 dark:text-neutral-200" />
+                ) : (
+                  <Sun className="w-4 h-4 text-neutral-700 dark:text-neutral-200" />
+                )}
+              </button>
 
               {/* Refresh Button */}
               <button
                 onClick={fetchData}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-600 active:scale-95 transition-all"
                 title="Refresh"
               >
-                <RefreshCw className="w-5 h-5" />
+                <RefreshCw className="w-4 h-4 text-neutral-700 dark:text-neutral-200" />
               </button>
             </div>
           </div>
@@ -146,7 +168,7 @@ export const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8">
         {/* Status Bar */}
         <StatusBar status={status} />
 
@@ -169,13 +191,15 @@ export const Dashboard = () => {
 
         {/* Empty State */}
         {projects.length === 0 && !loading && (
-          <div className="text-center py-12">
-            <Github className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
-              No projects found
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-100 rounded-2xl mb-4">
+              <GitBranch className="w-8 h-8 text-neutral-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-neutral-950 mb-2">
+              No projects yet
             </h3>
-            <p className="text-gray-500 dark:text-gray-500">
-              Create a project in one of your watched folders to get started
+            <p className="text-neutral-500 max-w-md mx-auto">
+              Create a project in your watched folders to start automatic backup syncing
             </p>
           </div>
         )}

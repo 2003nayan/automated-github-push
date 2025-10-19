@@ -601,10 +601,43 @@ class BackupService:
                     self.tracked_repos = data.get('tracked_repos', {})
                     self.stats.update(data.get('stats', {}))
 
+                # Migrate old repos: add account_username if missing
+                self._migrate_repo_accounts()
+
                 logger.info(f"Loaded state: {len(self.tracked_repos)} tracked repositories")
         except Exception as e:
             logger.error(f"Error loading state: {e}")
             self.tracked_repos = {}
+
+    def _migrate_repo_accounts(self):
+        """Migrate existing repos to include account_username based on path"""
+        updated = False
+        for repo_path, repo_info in self.tracked_repos.items():
+            # Skip if already has account_username
+            if 'account_username' in repo_info and repo_info['account_username'] != 'unknown':
+                continue
+
+            # Find matching watched path and extract account
+            for path_config in self.config.get('watched_paths', []):
+                watched_path = Path(path_config.get('path')).expanduser().resolve()
+                repo_path_obj = Path(repo_path)
+
+                # Check if repo is under this watched path
+                try:
+                    repo_path_obj.relative_to(watched_path)
+                    # Found matching watched path
+                    account_username = path_config.get('account', {}).get('username', 'unknown')
+                    repo_info['account_username'] = account_username
+                    logger.info(f"Migrated {repo_info.get('name')} to account: {account_username}")
+                    updated = True
+                    break
+                except ValueError:
+                    # Not under this watched path, continue
+                    continue
+
+        if updated:
+            self.save_state()
+            logger.info("Repository account migration completed")
 
     def save_state(self):
         """Save service state to file"""

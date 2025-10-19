@@ -4,55 +4,83 @@ import { Activity, CheckCircle, XCircle, Pause } from 'lucide-react';
 export const StatusBar = ({ status }) => {
   if (!status) return null;
 
+  const stats = [
+    {
+      icon: Activity,
+      label: 'Service Status',
+      value: status.daemon_running ? 'Running' : 'Stopped',
+      count: null,
+      color: status.daemon_running ? 'success' : 'danger',
+    },
+    {
+      icon: CheckCircle,
+      label: 'Active',
+      value: status.enabled_projects,
+      count: status.enabled_projects,
+      color: 'neutral',
+    },
+    {
+      icon: Pause,
+      label: 'Paused',
+      value: status.disabled_projects,
+      count: status.disabled_projects,
+      color: 'neutral',
+    },
+    {
+      icon: CheckCircle,
+      label: 'Total Backups',
+      value: status.total_backups,
+      count: status.total_backups,
+      color: 'neutral',
+    },
+    {
+      icon: XCircle,
+      label: 'Failed',
+      value: status.failed_backups,
+      count: status.failed_backups,
+      color: status.failed_backups > 0 ? 'danger' : 'neutral',
+    },
+  ];
+
   return (
-    <div className="bg-white dark:bg-dark-card rounded-lg shadow-md p-6 mb-6 border border-gray-200 dark:border-dark-border">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {/* Daemon Status */}
-        <div className="flex items-center gap-3">
-          <Activity className={`w-8 h-8 ${status.daemon_running ? 'text-green-500' : 'text-red-500'}`} />
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Daemon</p>
-            <p className="text-lg font-semibold">
-              {status.daemon_running ? 'Running' : 'Stopped'}
-            </p>
-          </div>
-        </div>
+    <div className="mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {stats.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={index}
+              className="minimal-card p-5 hover:border-neutral-300 group"
+            >
+              <div className="flex flex-col">
+                {/* Icon and Label */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className={`p-1.5 rounded ${
+                    stat.color === 'success' ? 'bg-success-light dark:bg-success-dark/20' :
+                    stat.color === 'danger' ? 'bg-error-light dark:bg-error-dark/20' :
+                    'bg-neutral-100 dark:bg-neutral-700'
+                  }`}>
+                    <Icon className={`w-4 h-4 ${
+                      stat.color === 'success' ? 'text-success dark:text-success' :
+                      stat.color === 'danger' ? 'text-error dark:text-error' :
+                      'text-neutral-700 dark:text-neutral-300'
+                    }`} />
+                  </div>
+                </div>
 
-        {/* Enabled Projects */}
-        <div className="flex items-center gap-3">
-          <CheckCircle className="w-8 h-8 text-green-500" />
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Enabled</p>
-            <p className="text-lg font-semibold">{status.enabled_projects}</p>
-          </div>
-        </div>
+                {/* Label */}
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-1">
+                  {stat.label}
+                </p>
 
-        {/* Disabled Projects */}
-        <div className="flex items-center gap-3">
-          <Pause className="w-8 h-8 text-gray-400" />
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Disabled</p>
-            <p className="text-lg font-semibold">{status.disabled_projects}</p>
-          </div>
-        </div>
-
-        {/* Successful Backups */}
-        <div className="flex items-center gap-3">
-          <CheckCircle className="w-8 h-8 text-blue-500" />
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Successful</p>
-            <p className="text-lg font-semibold">{status.total_backups}</p>
-          </div>
-        </div>
-
-        {/* Failed Backups */}
-        <div className="flex items-center gap-3">
-          <XCircle className="w-8 h-8 text-red-500" />
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Failed</p>
-            <p className="text-lg font-semibold">{status.failed_backups}</p>
-          </div>
-        </div>
+                {/* Value */}
+                <p className="text-2xl font-semibold text-neutral-950 dark:text-neutral-50 tracking-tight">
+                  {stat.value}
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

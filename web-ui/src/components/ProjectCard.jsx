@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   FolderGit2,
-  Github,
   Calendar,
   AlertCircle,
   CheckCircle2,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  GitCommit,
+  Circle
 } from 'lucide-react';
 
 export const ProjectCard = ({ project, onToggle, onBackup }) => {
@@ -24,73 +25,92 @@ export const ProjectCard = ({ project, onToggle, onBackup }) => {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Never';
     try {
-      return new Date(dateStr).toLocaleString();
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     } catch {
       return 'Invalid date';
     }
   };
 
   return (
-    <div className="bg-white dark:bg-dark-card rounded-lg shadow-md p-6 border border-gray-200 dark:border-dark-border hover:shadow-lg transition-shadow">
+    <div className="minimal-card p-6 hover:border-neutral-300 dark:hover:border-neutral-600 group animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <FolderGit2 className="w-8 h-8 text-primary-500" />
-          <div>
-            <h3 className="text-lg font-semibold">{project.name}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 bg-gradient-to-br from-neutral-900 to-neutral-950 dark:from-neutral-100 dark:to-neutral-200 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+            <FolderGit2 className="w-5 h-5 text-white dark:text-neutral-900" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-neutral-950 dark:text-neutral-50 mb-1 truncate">
+              {project.name}
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
               {project.account}
             </p>
           </div>
         </div>
 
-        {/* Enable/Disable Toggle */}
+        {/* Status Toggle */}
         <button
           onClick={() => onToggle(project.id, !project.enabled)}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 flex-shrink-0 ml-2 ${
             project.enabled
-              ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+              ? 'bg-success-light dark:bg-success-dark/20 text-success-dark dark:text-success border border-success/20 dark:border-success/30'
+              : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600'
           }`}
         >
-          {project.enabled ? 'Enabled' : 'Disabled'}
+          <Circle className={`w-2 h-2 ${project.enabled ? 'fill-success' : 'fill-neutral-400 dark:fill-neutral-500'}`} />
+          {project.enabled ? 'Active' : 'Paused'}
         </button>
       </div>
 
-      {/* Status */}
-      <div className="space-y-2 mb-4">
-        <div className="flex items-center gap-2 text-sm">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        {/* Status */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700">
           {project.enabled ? (
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-success flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-gray-400" />
+            <AlertCircle className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
           )}
-          <span className="text-gray-600 dark:text-gray-300">
-            Status: {project.enabled ? 'Syncing' : 'Paused'}
+          <span className="text-xs text-neutral-600 dark:text-neutral-300 truncate">
+            {project.enabled ? 'Syncing' : 'Paused'}
           </span>
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          <span className="text-gray-600 dark:text-gray-300">
-            Last backup: {formatDate(project.last_backup)}
+        {/* Backup Count */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700">
+          <GitCommit className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400 flex-shrink-0" />
+          <span className="text-xs text-neutral-600 dark:text-neutral-300 truncate">
+            {project.backup_count} {project.backup_count === 1 ? 'backup' : 'backups'}
           </span>
         </div>
+      </div>
 
-        <div className="flex items-center gap-2 text-sm">
-          <Github className="w-4 h-4 text-gray-400" />
-          <span className="text-gray-600 dark:text-gray-300">
-            {project.backup_count} backups
-          </span>
-        </div>
+      {/* Last Backup */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700 mb-5">
+        <Calendar className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 flex-shrink-0" />
+        <span className="text-xs text-neutral-600 dark:text-neutral-300">
+          Last backup: {formatDate(project.last_backup)}
+        </span>
       </div>
 
       {/* Error Display */}
       {project.error_count > 0 && project.last_error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-          <p className="text-sm text-red-700 dark:text-red-300">
-            {project.last_error}
-          </p>
+        <div className="mb-5 p-3 bg-error-light dark:bg-error-dark/20 rounded-lg border border-error/20 dark:border-error/30">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-3.5 h-3.5 text-error mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-error-dark dark:text-error leading-relaxed">
+              {project.last_error}
+            </p>
+          </div>
         </div>
       )}
 
@@ -99,15 +119,15 @@ export const ProjectCard = ({ project, onToggle, onBackup }) => {
         <button
           onClick={handleBackup}
           disabled={!project.enabled || isBackingUp}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          className="minimal-button-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isBackingUp ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Backing up...
+              <span className="text-sm">Syncing...</span>
             </>
           ) : (
-            'Backup Now'
+            <span className="text-sm">Backup Now</span>
           )}
         </button>
 
@@ -116,8 +136,8 @@ export const ProjectCard = ({ project, onToggle, onBackup }) => {
             href={project.github_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
-            title="Open on GitHub"
+            className="minimal-button-secondary flex items-center justify-center w-12 h-12"
+            title="View on GitHub"
           >
             <ExternalLink className="w-4 h-4" />
           </a>
