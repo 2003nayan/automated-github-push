@@ -129,8 +129,8 @@ def get_status():
         service = current_app.backup_service
 
         enabled_projects = sum(
-            1 for repo_name in service.repositories.keys()
-            if service.config.get_project_enabled(repo_name)
+            1 for repo_info in service.repositories.values()
+            if service.config.get_project_enabled(repo_info.get('name'))
         )
 
         return jsonify({
