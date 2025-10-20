@@ -86,13 +86,6 @@ def backup_project(project_id):
     try:
         service = current_app.backup_service
 
-        # Check if project exists
-        if project_id not in service.repositories:
-            return jsonify({
-                'success': False,
-                'error': 'Project not found'
-            }), 404
-
         # Check if project is enabled
         if not service.config.get_project_enabled(project_id):
             return jsonify({
@@ -100,7 +93,7 @@ def backup_project(project_id):
                 'error': 'Project sync is disabled'
             }), 400
 
-        # Trigger backup
+        # Trigger backup (backup_repository will check if project exists)
         success = service.backup_repository(project_id)
 
         if success:
@@ -111,8 +104,8 @@ def backup_project(project_id):
         else:
             return jsonify({
                 'success': False,
-                'error': 'Backup failed - check logs for details'
-            }), 500
+                'error': 'Project not found or backup failed - check logs for details'
+            }), 404
 
     except Exception as e:
         logger.error(f"Error backing up {project_id}: {e}")
