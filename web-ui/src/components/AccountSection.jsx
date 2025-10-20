@@ -2,7 +2,7 @@ import React from 'react';
 import { User, Folder } from 'lucide-react';
 import { ProjectCard } from './ProjectCard';
 
-export const AccountSection = ({ account, projects, onToggle, onBackup }) => {
+export const AccountSection = ({ account, projects, onToggle, onBackup, onDelete }) => {
   if (!projects || projects.length === 0) {
     return null;
   }
@@ -40,6 +40,7 @@ export const AccountSection = ({ account, projects, onToggle, onBackup }) => {
             project={project}
             onToggle={onToggle}
             onBackup={onBackup}
+            onDelete={onDelete}
           />
         ))}
       </div>

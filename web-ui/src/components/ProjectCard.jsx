@@ -7,11 +7,14 @@ import {
   Loader2,
   ExternalLink,
   GitCommit,
-  Circle
+  Circle,
+  Trash2
 } from 'lucide-react';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
-export const ProjectCard = ({ project, onToggle, onBackup }) => {
+export const ProjectCard = ({ project, onToggle, onBackup, onDelete }) => {
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Update time every minute to refresh relative timestamps
@@ -30,6 +33,11 @@ export const ProjectCard = ({ project, onToggle, onBackup }) => {
     } finally {
       setTimeout(() => setIsBackingUp(false), 1000);
     }
+  };
+
+  const handleDelete = async (options) => {
+    await onDelete(project.id, options);
+    setShowDeleteModal(false);
   };
 
   const formatDate = (dateStr) => {
@@ -151,7 +159,24 @@ export const ProjectCard = ({ project, onToggle, onBackup }) => {
             <ExternalLink className="w-4 h-4" />
           </a>
         )}
+
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="minimal-button-secondary flex items-center justify-center w-12 h-12 hover:bg-error-light hover:text-error hover:border-error/30 dark:hover:bg-error-dark/20 dark:hover:text-error dark:hover:border-error/30 transition-all"
+          title="Delete Project"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          project={project}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
+        />
+      )}
     </div>
   );
 };

@@ -679,6 +679,81 @@ class BackupService:
         logger.error(f"Repository not found: {repo_name}")
         return False
 
+    def delete_repository_complete(self, repo_name: str, delete_github: bool = False, delete_local: bool = False) -> dict:
+        """Complete repository deletion with options
+
+        Args:
+            repo_name: Name of the repository to delete
+            delete_github: If True, delete the GitHub repository
+            delete_local: If True, delete local files (DANGEROUS!)
+
+        Returns:
+            dict: Status of each deletion step
+        """
+        result = {
+            'github_deleted': False,
+            'local_deleted': False,
+            'tracking_removed': False,
+            'errors': []
+        }
+
+        # Find the repository
+        repo_path = None
+        repo_info = None
+        for path, info in self.tracked_repos.items():
+            if info.get('name') == repo_name:
+                repo_path = path
+                repo_info = info
+                break
+
+        if not repo_info:
+            result['errors'].append(f"Repository not found: {repo_name}")
+            return result
+
+        account_username = repo_info.get('account_username', 'unknown')
+
+        # Step 1: Delete from GitHub
+        if delete_github:
+            try:
+                # Find account config
+                account_config = None
+                for path_config in self.watched_paths:
+                    if path_config.get('account', {}).get('username') == account_username:
+                        account_config = path_config.get('account', {})
+                        break
+
+                if account_config:
+                    result['github_deleted'] = self.github_service.delete_repository(repo_name, account_config)
+                    if not result['github_deleted']:
+                        result['errors'].append(f"Failed to delete from GitHub: {repo_name}")
+                else:
+                    result['errors'].append(f"Account config not found for: {account_username}")
+            except Exception as e:
+                result['errors'].append(f"GitHub deletion error: {str(e)}")
+                logger.error(f"Error deleting from GitHub: {e}")
+
+        # Step 2: Delete local files
+        if delete_local and repo_path:
+            try:
+                import shutil
+                path = Path(repo_path)
+                if path.exists():
+                    shutil.rmtree(path)
+                    result['local_deleted'] = True
+                    logger.warning(f"DELETED LOCAL FILES: {repo_path}")
+            except Exception as e:
+                result['errors'].append(f"Local deletion error: {str(e)}")
+                logger.error(f"Error deleting local files: {e}")
+
+        # Step 3: Remove from tracking (always attempt this)
+        try:
+            result['tracking_removed'] = self.remove_repository(repo_name)
+        except Exception as e:
+            result['errors'].append(f"Tracking removal error: {str(e)}")
+            logger.error(f"Error removing from tracking: {e}")
+
+        return result
+
     def add_repository(self, folder_path: Path, account_username: Optional[str] = None) -> bool:
         """Manually add a repository to tracking with optional account selection"""
         if not folder_path.exists():

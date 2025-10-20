@@ -17,6 +17,8 @@ export const projectsApi = {
     api.post(`/projects/${projectId}/backup`),
   add: (folderPath, accountUsername) =>
     api.post('/projects/add', { folder_path: folderPath, account_username: accountUsername }),
+  delete: (projectId, options) =>
+    api.delete(`/projects/${projectId}/delete`, { data: options }),
 };
 
 export const statusApi = {

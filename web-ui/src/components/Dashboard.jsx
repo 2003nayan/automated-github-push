@@ -94,6 +94,17 @@ export const Dashboard = () => {
     }
   };
 
+  const handleDelete = async (projectId, options) => {
+    try {
+      await projectsApi.delete(projectId, options);
+      // Refresh data to remove deleted project
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert('Failed to delete project: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-neutral-50 dark:bg-neutral-900">
@@ -208,6 +219,7 @@ export const Dashboard = () => {
               projects={accountProjects}
               onToggle={handleToggle}
               onBackup={handleBackup}
+              onDelete={handleDelete}
             />
           );
         })}

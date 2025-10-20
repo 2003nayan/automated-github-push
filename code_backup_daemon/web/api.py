@@ -268,6 +268,84 @@ def get_config():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/projects/<project_id>/delete', methods=['DELETE'])
+def delete_project(project_id):
+    """Delete project from tracking and optionally from GitHub"""
+    try:
+        data = request.json or {}
+        delete_github = data.get('delete_github', False)
+        delete_local = data.get('delete_local', False)
+
+        service = current_app.backup_service
+
+        # Find the project
+        project_info = None
+        project_path = None
+        for repo_path, repo_info in service.repositories.items():
+            if repo_info.get('name') == project_id or Path(repo_path).name == project_id:
+                project_info = repo_info
+                project_path = repo_path
+                break
+
+        if not project_info:
+            return jsonify({
+                'success': False,
+                'error': f'Project not found: {project_id}'
+            }), 404
+
+        account_username = project_info.get('account_username', 'unknown')
+
+        # Step 1: Delete from GitHub if requested
+        github_deleted = False
+        if delete_github:
+            # Find account config
+            account_config = None
+            for path_config in service.config.get('watched_paths', []):
+                if path_config.get('account', {}).get('username') == account_username:
+                    account_config = path_config.get('account', {})
+                    break
+
+            if account_config:
+                github_deleted = service.github_service.delete_repository(project_id, account_config)
+                if not github_deleted:
+                    logger.warning(f"Failed to delete {project_id} from GitHub")
+            else:
+                logger.error(f"Could not find account config for {account_username}")
+
+        # Step 2: Delete local files if requested (DANGEROUS!)
+        local_deleted = False
+        if delete_local and project_path:
+            try:
+                import shutil
+                path = Path(project_path)
+                if path.exists():
+                    shutil.rmtree(path)
+                    local_deleted = True
+                    logger.warning(f"DELETED LOCAL FILES: {project_path}")
+            except Exception as e:
+                logger.error(f"Failed to delete local files for {project_id}: {e}")
+
+        # Step 3: Remove from tracking (always do this)
+        tracking_removed = service.remove_repository(project_id)
+
+        return jsonify({
+            'success': True,
+            'message': f'Project {project_id} deleted successfully',
+            'details': {
+                'github_deleted': github_deleted,
+                'local_deleted': local_deleted,
+                'tracking_removed': tracking_removed
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting project {project_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @api_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
