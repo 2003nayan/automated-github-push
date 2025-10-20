@@ -4,7 +4,8 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useTheme } from '../hooks/useTheme';
 import { StatusBar } from './StatusBar';
 import { AccountSection } from './AccountSection';
-import { GitBranch, RefreshCw, Loader2, Sun, Moon } from 'lucide-react';
+import { AddProjectModal } from './AddProjectModal';
+import { GitBranch, RefreshCw, Loader2, Sun, Moon, FolderPlus } from 'lucide-react';
 
 export const Dashboard = () => {
   const [projects, setProjects] = useState([]);
@@ -12,6 +13,7 @@ export const Dashboard = () => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const { connected, events } = useWebSocket();
   const { theme, toggleTheme } = useTheme();
 
@@ -81,6 +83,17 @@ export const Dashboard = () => {
     }
   };
 
+  const handleAddProject = async (folderPath, accountUsername) => {
+    try {
+      await projectsApi.add(folderPath, accountUsername);
+      // Refresh data to show new project
+      await fetchData();
+    } catch (error) {
+      console.error('Error adding project:', error);
+      throw error; // Re-throw to let modal handle the error
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-neutral-50 dark:bg-neutral-900">
@@ -140,6 +153,16 @@ export const Dashboard = () => {
                   {connected ? 'Live' : 'Offline'}
                 </span>
               </div>
+
+              {/* Add Project Button */}
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-500 text-white hover:bg-accent-600 active:scale-95 transition-all shadow-sm"
+                title="Add new project"
+              >
+                <FolderPlus className="w-4 h-4" />
+                <span className="text-sm font-medium">Add Folder</span>
+              </button>
 
               {/* Theme Toggle */}
               <button
@@ -204,6 +227,15 @@ export const Dashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Add Project Modal */}
+      {showAddModal && (
+        <AddProjectModal
+          accounts={accounts}
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddProject}
+        />
+      )}
     </div>
   );
 };

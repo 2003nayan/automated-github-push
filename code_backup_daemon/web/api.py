@@ -142,6 +142,75 @@ def get_status():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/projects/add', methods=['POST'])
+def add_project():
+    """Manually add a new project/folder to tracking"""
+    try:
+        data = request.json
+        folder_path = data.get('folder_path')
+        account_username = data.get('account_username')
+
+        if not folder_path:
+            return jsonify({
+                'success': False,
+                'error': 'folder_path is required'
+            }), 400
+
+        if not account_username:
+            return jsonify({
+                'success': False,
+                'error': 'account_username is required'
+            }), 400
+
+        service = current_app.backup_service
+        from pathlib import Path
+        path = Path(folder_path).expanduser()
+
+        # Validate path exists
+        if not path.exists():
+            return jsonify({
+                'success': False,
+                'error': f'Folder does not exist: {folder_path}'
+            }), 404
+
+        # Validate it's a directory
+        if not path.is_dir():
+            return jsonify({
+                'success': False,
+                'error': f'Path is not a directory: {folder_path}'
+            }), 400
+
+        # Add repository
+        success = service.add_repository(path, account_username)
+
+        if success:
+            service.save_state()
+
+            # Notify WebSocket clients
+            if service.websocket_handler:
+                service.websocket_handler.broadcast_project_detected(
+                    path.name, account_username
+                )
+
+            return jsonify({
+                'success': True,
+                'message': f'Successfully added {path.name} to {account_username}',
+                'project_name': path.name
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to add project - check logs for details'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error adding project: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @api_bp.route('/accounts', methods=['GET'])
 def get_accounts():
     """Get list of configured accounts"""

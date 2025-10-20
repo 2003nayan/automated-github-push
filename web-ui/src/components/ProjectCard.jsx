@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FolderGit2,
   Calendar,
@@ -12,6 +12,16 @@ import {
 
 export const ProjectCard = ({ project, onToggle, onBackup }) => {
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update time every minute to refresh relative timestamps
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleBackup = async () => {
     setIsBackingUp(true);
@@ -26,8 +36,7 @@ export const ProjectCard = ({ project, onToggle, onBackup }) => {
     if (!dateStr) return 'Never';
     try {
       const date = new Date(dateStr);
-      const now = new Date();
-      const diffMs = now - date;
+      const diffMs = currentTime - date;
       const diffMins = Math.floor(diffMs / 60000);
 
       if (diffMins < 1) return 'Just now';

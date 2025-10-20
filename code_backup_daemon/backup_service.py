@@ -679,10 +679,32 @@ class BackupService:
         logger.error(f"Repository not found: {repo_name}")
         return False
 
-    def add_repository(self, folder_path: Path) -> bool:
-        """Manually add a repository to tracking"""
+    def add_repository(self, folder_path: Path, account_username: Optional[str] = None) -> bool:
+        """Manually add a repository to tracking with optional account selection"""
         if not folder_path.exists():
             logger.error(f"Folder does not exist: {folder_path}")
             return False
 
-        return self.process_folder(folder_path)
+        # Find the appropriate path_config for this account
+        path_config = None
+
+        if account_username:
+            # Find path_config for specified account
+            for pc in self.watched_paths:
+                if pc.get('account', {}).get('username') == account_username:
+                    path_config = pc
+                    break
+
+            if not path_config:
+                logger.error(f"Account not found: {account_username}")
+                return False
+        else:
+            # Use first available path_config if no account specified
+            if self.watched_paths:
+                path_config = self.watched_paths[0]
+            else:
+                logger.error("No watched paths configured")
+                return False
+
+        logger.info(f"Adding repository {folder_path.name} to account {path_config.get('account', {}).get('username')}")
+        return self.process_folder(folder_path, path_config, is_initial_scan=False)

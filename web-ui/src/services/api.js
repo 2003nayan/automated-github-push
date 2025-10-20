@@ -15,6 +15,8 @@ export const projectsApi = {
     api.post(`/projects/${projectId}/toggle`, { enabled }),
   backup: (projectId) =>
     api.post(`/projects/${projectId}/backup`),
+  add: (folderPath, accountUsername) =>
+    api.post('/projects/add', { folder_path: folderPath, account_username: accountUsername }),
 };
 
 export const statusApi = {
