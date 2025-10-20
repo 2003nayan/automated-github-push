@@ -29,16 +29,31 @@ class GitService:
         except InvalidGitRepositoryError:
             return False
 
-    def init_repo(self, path: Path) -> bool:
-        """Initialize a new git repository"""
+    def init_repo(self, path: Path, username: str = None, email: str = None) -> bool:
+        """Initialize a new git repository with optional user config"""
         try:
             repo = Repo.init(path)
+
+            # Set repository-specific git config BEFORE making initial commit
+            # This ensures the initial commit is attributed to the correct account
+            if username and email:
+                # Use config_writer and ensure it's released before commit
+                config_writer = repo.config_writer()
+                config_writer.set_value("user", "name", username)
+                config_writer.set_value("user", "email", email)
+                config_writer.release()  # Explicitly flush and close the config
+                logger.info(f"Set git config for {path}: {username} <{email}>")
+
+                # Verify config was set correctly
+                actual_name = repo.config_reader().get_value("user", "name")
+                actual_email = repo.config_reader().get_value("user", "email")
+                logger.debug(f"Verified git config - name: {actual_name}, email: {actual_email}")
 
             # Set default branch
             if repo.head.is_valid():
                 repo.git.branch('-M', self.default_branch)
             else:
-                # Create initial commit first
+                # Create initial commit
                 self._create_initial_commit(repo, path)
                 repo.git.branch('-M', self.default_branch)
 
@@ -59,8 +74,10 @@ class GitService:
         # Stage all files
         repo.git.add('.')
 
-        # Create initial commit
-        repo.index.commit("Initial commit (auto-backup)")
+        # Create initial commit using repo.git.commit() instead of repo.index.commit()
+        # This ensures the commit uses the freshly set repository-level git config
+        # rather than cached config from when the Repo object was instantiated
+        repo.git.commit('-m', "Initial commit (auto-backup)")
         logger.info(f"Created initial commit for {path}")
 
     def _create_gitignore(self, gitignore_path: Path):

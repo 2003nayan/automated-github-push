@@ -278,14 +278,14 @@ class BackupService:
 
         logger.info(f"Initializing new repository: {folder_name} (account: {account_username})")
 
-        # Initialize git repository
-        if not self.git_service.init_repo(folder_path):
+        # Get email for git config
+        email = account_config.get('email', f"{account_username}@users.noreply.github.com")
+
+        # Initialize git repository WITH user config before initial commit
+        # This ensures the initial commit is attributed to the correct account
+        if not self.git_service.init_repo(folder_path, account_username, email):
             logger.error(f"Failed to initialize git repository: {folder_name}")
             return False
-
-        # Set git config for this repository (user.name and user.email)
-        email = account_config.get('email', f"{account_username}@users.noreply.github.com")
-        self.git_service.set_repo_git_config(folder_path, account_username, email)
 
         # Create GitHub repository
         description = self.github_service.generate_repo_description(folder_path)
