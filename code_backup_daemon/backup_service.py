@@ -414,20 +414,35 @@ class BackupService:
                     repo_info['status'] = 'missing'
                     continue
 
-                if self._backup_repository(path):
+                # Perform backup and get detailed result
+                result = self._backup_repository(path)
+
+                # Always update last_check timestamp (daemon checked this repo)
+                repo_info['last_check'] = datetime.now().isoformat()
+
+                # Handle result based on what actually happened
+                if result['success'] and result['changes_pushed']:
+                    # Changes were committed and pushed to GitHub
                     successful += 1
                     repo_info['last_backup'] = datetime.now().isoformat()
                     repo_info['backup_count'] = repo_info.get('backup_count', 0) + 1
                     repo_info['status'] = 'synced'
+                elif result['success'] and not result['changes_pushed']:
+                    # No changes to backup (success, but nothing to do)
+                    skipped += 1
+                    repo_info['status'] = 'no_changes'
                 else:
+                    # Backup failed
                     failed += 1
                     repo_info['status'] = 'failed'
+                    repo_info['last_error'] = result['message']
 
             except Exception as e:
                 logger.error(f"Error backing up {repo_path}: {e}")
                 failed += 1
                 if repo_path in self.tracked_repos:
                     self.tracked_repos[repo_path]['status'] = 'error'
+                    self.tracked_repos[repo_path]['last_error'] = str(e)
 
         self.stats['successful_backups'] += successful
         self.stats['failed_backups'] += failed
@@ -441,8 +456,16 @@ class BackupService:
         # Save state periodically
         self.save_state()
 
-    def _backup_repository(self, repo_path: Path) -> bool:
-        """Backup a single repository (internal method)"""
+    def _backup_repository(self, repo_path: Path) -> Dict[str, Any]:
+        """Backup a single repository (internal method)
+
+        Returns:
+            dict: {
+                'success': bool,
+                'changes_pushed': bool,
+                'message': str
+            }
+        """
         try:
             repo_name = repo_path.name
 
@@ -456,7 +479,11 @@ class BackupService:
                 # Notify success (no changes)
                 if self.websocket_handler:
                     self.websocket_handler.broadcast_backup_completed(repo_name, True)
-                return True
+                return {
+                    'success': True,
+                    'changes_pushed': False,
+                    'message': 'No changes to backup'
+                }
 
             logger.info(f"Backing up {repo_name}...")
 
@@ -477,7 +504,11 @@ class BackupService:
             else:
                 logger.warning(f"Failed to backup {repo_name}")
 
-            return success
+            return {
+                'success': success,
+                'changes_pushed': success,
+                'message': 'Pushed to GitHub' if success else 'Push failed'
+            }
 
         except Exception as e:
             logger.error(f"Error backing up {repo_path}: {e}")
@@ -486,7 +517,11 @@ class BackupService:
                 self.websocket_handler.broadcast_backup_completed(
                     repo_path.name, False, str(e)
                 )
-            return False
+            return {
+                'success': False,
+                'changes_pushed': False,
+                'message': str(e)
+            }
 
     def backup_repository(self, repo_name: str) -> bool:
         """Public method to backup a specific repository by name"""
@@ -501,15 +536,26 @@ class BackupService:
                         return False
 
                     logger.info(f"Manual backup triggered for {repo_name}")
-                    success = self._backup_repository(path)
+                    result = self._backup_repository(path)
 
-                    if success:
+                    # Always update last_check
+                    repo_info['last_check'] = datetime.now().isoformat()
+
+                    # Update based on what actually happened
+                    if result['success'] and result['changes_pushed']:
                         repo_info['last_backup'] = datetime.now().isoformat()
                         repo_info['backup_count'] = repo_info.get('backup_count', 0) + 1
                         repo_info['status'] = 'synced'
                         self.save_state()
+                    elif result['success'] and not result['changes_pushed']:
+                        repo_info['status'] = 'no_changes'
+                        self.save_state()
+                    else:
+                        repo_info['status'] = 'failed'
+                        repo_info['last_error'] = result['message']
+                        self.save_state()
 
-                    return success
+                    return result['success']
 
             logger.error(f"Repository not found: {repo_name}")
             return False

@@ -88,36 +88,70 @@ export const ProjectCard = ({ project, onToggle, onBackup, onDelete }) => {
         </button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        {/* Status */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700">
-          {project.enabled ? (
+      {/* Status Badge */}
+      <div className="mb-4">
+        {project.status === 'no_changes' && project.enabled && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-success-light dark:bg-success-dark/20 rounded-lg border border-success/20 dark:border-success/30">
             <CheckCircle2 className="w-3.5 h-3.5 text-success flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
-          )}
-          <span className="text-xs text-neutral-600 dark:text-neutral-300 truncate">
-            {project.enabled ? 'Syncing' : 'Paused'}
-          </span>
-        </div>
+            <span className="text-xs text-success-dark dark:text-success font-medium">
+              No changes
+            </span>
+          </div>
+        )}
+        {project.status === 'synced' && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-success-light dark:bg-success-dark/20 rounded-lg border border-success/20 dark:border-success/30">
+            <CheckCircle2 className="w-3.5 h-3.5 text-success flex-shrink-0" />
+            <span className="text-xs text-success-dark dark:text-success font-medium">
+              Synced
+            </span>
+          </div>
+        )}
+        {project.status === 'failed' && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-error-light dark:bg-error-dark/20 rounded-lg border border-error/20 dark:border-error/30">
+            <AlertCircle className="w-3.5 h-3.5 text-error flex-shrink-0" />
+            <span className="text-xs text-error-dark dark:text-error font-medium">
+              Sync failed
+            </span>
+          </div>
+        )}
+        {!project.enabled && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-neutral-100 dark:bg-neutral-700 rounded-lg border border-neutral-200 dark:border-neutral-600">
+            <Circle className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
+            <span className="text-xs text-neutral-600 dark:text-neutral-300 font-medium">
+              Paused
+            </span>
+          </div>
+        )}
+      </div>
 
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
         {/* Backup Count */}
         <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700">
           <GitCommit className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400 flex-shrink-0" />
           <span className="text-xs text-neutral-600 dark:text-neutral-300 truncate">
-            {project.backup_count} {project.backup_count === 1 ? 'backup' : 'backups'}
+            {project.backup_count || 0} {project.backup_count === 1 ? 'push' : 'pushes'}
+          </span>
+        </div>
+
+        {/* Last Check */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700">
+          <Calendar className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 flex-shrink-0" />
+          <span className="text-xs text-neutral-600 dark:text-neutral-300 truncate">
+            Checked: {formatDate(project.last_check)}
           </span>
         </div>
       </div>
 
-      {/* Last Backup */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700 mb-5">
-        <Calendar className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 flex-shrink-0" />
-        <span className="text-xs text-neutral-600 dark:text-neutral-300">
-          Last backup: {formatDate(project.last_backup)}
-        </span>
-      </div>
+      {/* Last Backup (actual push) */}
+      {project.last_backup && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-850 rounded-lg border border-neutral-100 dark:border-neutral-700 mb-5">
+          <GitCommit className="w-3.5 h-3.5 text-accent-500 flex-shrink-0" />
+          <span className="text-xs text-neutral-600 dark:text-neutral-300">
+            Last pushed: {formatDate(project.last_backup)}
+          </span>
+        </div>
+      )}
 
       {/* Error Display */}
       {project.error_count > 0 && project.last_error && (

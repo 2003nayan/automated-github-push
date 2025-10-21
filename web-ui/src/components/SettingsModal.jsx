@@ -247,7 +247,7 @@ export const SettingsModal = ({ onClose }) => {
                     </div>
 
                     <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-neutral-200 dark:border-neutral-700">
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Last Backup</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Last Push to GitHub</p>
                       <p className="text-sm text-neutral-700 dark:text-neutral-300 font-medium">
                         {lastBackupFormatted || 'Never'}
                       </p>
