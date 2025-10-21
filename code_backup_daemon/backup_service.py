@@ -705,10 +705,17 @@ class BackupService:
 
                 if last_commit_info:
                     actual_last_commit_time = last_commit_info['date']
+                    actual_commit_count = self._get_commit_count(path)
                     stored_last_backup = repo_info.get('last_backup')
+                    stored_backup_count = repo_info.get('backup_count', 0)
 
-                    # If we have a stored last_backup, check if it's newer than actual git commit
-                    # This would indicate corruption from old code
+                    # Always check and fix backup_count if it doesn't match reality
+                    if actual_commit_count is not None and stored_backup_count != actual_commit_count:
+                        repo_info['backup_count'] = actual_commit_count
+                        logger.info(f"Correcting backup count for {repo_info.get('name')}: {stored_backup_count} -> {actual_commit_count}")
+                        updated = True
+
+                    # Check timestamp corruption
                     if stored_last_backup:
                         try:
                             stored_time = datetime.fromisoformat(stored_last_backup)
@@ -717,15 +724,6 @@ class BackupService:
                             if stored_time > actual_last_commit_time:
                                 logger.info(f"Fixing corrupted timestamp for {repo_info.get('name')}: {stored_time} -> {actual_last_commit_time}")
                                 repo_info['last_backup'] = actual_last_commit_time.isoformat()
-
-                                # Also reset backup_count based on actual commit count
-                                # This fixes the inflated count issue
-                                actual_commit_count = self._get_commit_count(path)
-                                if actual_commit_count is not None:
-                                    old_count = repo_info.get('backup_count', 0)
-                                    repo_info['backup_count'] = actual_commit_count
-                                    logger.info(f"Reset backup count for {repo_info.get('name')}: {old_count} -> {actual_commit_count}")
-
                                 updated = True
                         except ValueError:
                             pass
