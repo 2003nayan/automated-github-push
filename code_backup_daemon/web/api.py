@@ -414,6 +414,93 @@ def browse_folders():
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/settings/backup-schedule', methods=['GET'])
+def get_backup_schedule():
+    """Get backup schedule settings"""
+    try:
+        service = current_app.backup_service
+        config = service.config
+
+        # Get backup interval in seconds
+        interval_seconds = config.get('daemon.backup_interval', 21600)
+
+        # Calculate next backup time
+        last_backup_time = service.stats.get('last_backup_time')
+        next_backup_time = None
+
+        if last_backup_time:
+            try:
+                if isinstance(last_backup_time, str):
+                    last_backup_dt = datetime.fromisoformat(last_backup_time)
+                else:
+                    last_backup_dt = last_backup_time
+
+                from datetime import timedelta
+                next_backup_dt = last_backup_dt + timedelta(seconds=interval_seconds)
+                next_backup_time = next_backup_dt.isoformat()
+            except Exception as e:
+                logger.error(f"Error calculating next backup time: {e}")
+
+        return jsonify({
+            'interval_seconds': interval_seconds,
+            'interval_hours': interval_seconds / 3600,
+            'last_backup_time': last_backup_time,
+            'next_backup_time': next_backup_time,
+            'auto_backup_enabled': service.running
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching backup schedule: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/settings/backup-schedule', methods=['POST'])
+def update_backup_schedule():
+    """Update backup schedule settings"""
+    try:
+        data = request.json
+        interval_hours = data.get('interval_hours')
+
+        if interval_hours is None:
+            return jsonify({
+                'success': False,
+                'error': 'interval_hours is required'
+            }), 400
+
+        # Validate interval (minimum 1 hour, maximum 7 days)
+        if interval_hours < 1 or interval_hours > 168:
+            return jsonify({
+                'success': False,
+                'error': 'Interval must be between 1 and 168 hours (7 days)'
+            }), 400
+
+        service = current_app.backup_service
+        config = service.config
+
+        # Update config
+        interval_seconds = int(interval_hours * 3600)
+        config.set('daemon.backup_interval', interval_seconds)
+
+        # Save config to file
+        config.save()
+
+        logger.info(f"Backup interval updated to {interval_hours} hours ({interval_seconds} seconds)")
+
+        return jsonify({
+            'success': True,
+            'message': f'Backup interval updated to {interval_hours} hours',
+            'interval_seconds': interval_seconds,
+            'interval_hours': interval_hours
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating backup schedule: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @api_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""

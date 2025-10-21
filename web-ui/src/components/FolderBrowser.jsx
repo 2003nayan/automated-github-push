@@ -156,7 +156,7 @@ export const FolderBrowser = ({ onSelect, initialPath }) => {
       </div>
 
       {/* Instructions */}
-      <div className="px-3 pb-2">
+      <div className="px-3 py-2">
         <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
           Single click to select • Double click to open
         </p>

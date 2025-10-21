@@ -5,7 +5,8 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { StatusBar } from './StatusBar';
 import { AccountSection } from './AccountSection';
 import { AddProjectModal } from './AddProjectModal';
-import { GitBranch, RefreshCw, Loader2, Sun, Moon, FolderPlus } from 'lucide-react';
+import { SettingsModal } from './SettingsModal';
+import { GitBranch, RefreshCw, Loader2, Sun, Moon, FolderPlus, Settings } from 'lucide-react';
 
 export const Dashboard = () => {
   const [projects, setProjects] = useState([]);
@@ -14,6 +15,7 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const { connected, events } = useWebSocket();
   // const { theme, toggleTheme } = useTheme();
@@ -201,6 +203,15 @@ export const Dashboard = () => {
                 <span className="text-sm font-medium">Add Folder</span>
               </button>
 
+              {/* Settings Button */}
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-600 active:scale-95 transition-all"
+                title="Settings"
+              >
+                <Settings className="w-4 h-4 text-neutral-700 dark:text-neutral-200" />
+              </button>
+
               {/* Theme Toggle */}
               {/* <button
                 onClick={toggleTheme}
@@ -309,6 +320,13 @@ export const Dashboard = () => {
           accounts={accounts}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddProject}
+        />
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={() => setShowSettingsModal(false)}
         />
       )}
     </div>

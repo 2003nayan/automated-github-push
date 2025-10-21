@@ -37,4 +37,10 @@ export const browseApi = {
   getFolders: (path) => api.get('/browse-folders', { params: { path } }),
 };
 
+export const settingsApi = {
+  getBackupSchedule: () => api.get('/settings/backup-schedule'),
+  updateBackupSchedule: (intervalHours) =>
+    api.post('/settings/backup-schedule', { interval_hours: intervalHours }),
+};
+
 export default api;
