@@ -11,48 +11,83 @@ export const SettingsModal = ({ onClose }) => {
   const [intervalHours, setIntervalHours] = useState(6);
   const [timeUntilNext, setTimeUntilNext] = useState('');
   const [nextBackupTime, setNextBackupTime] = useState('');
+  const [lastBackupFormatted, setLastBackupFormatted] = useState('');
 
   useEffect(() => {
     fetchSchedule();
   }, []);
 
-  // Update countdown every second
+  // Update countdown and last backup time every second
   useEffect(() => {
-    if (!schedule?.next_backup_time) return;
+    if (!schedule) return;
 
-    const updateCountdown = () => {
+    const updateTimes = () => {
       const now = new Date();
-      const nextBackup = new Date(schedule.next_backup_time);
-      const diff = nextBackup - now;
 
-      if (diff <= 0) {
-        setTimeUntilNext('Backup running or overdue');
-        return;
+      // Update next backup countdown
+      if (schedule.next_backup_time) {
+        const nextBackup = new Date(schedule.next_backup_time);
+        const diff = nextBackup - now;
+
+        if (diff <= 0) {
+          setTimeUntilNext('Backup running or overdue');
+        } else {
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+          if (hours > 0) {
+            setTimeUntilNext(`${hours}h ${minutes}m`);
+          } else if (minutes > 0) {
+            setTimeUntilNext(`${minutes}m ${seconds}s`);
+          } else {
+            setTimeUntilNext(`${seconds}s`);
+          }
+        }
+
+        // Format absolute time
+        const timeStr = nextBackup.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        setNextBackupTime(timeStr);
       }
 
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      // Update last backup time (real-time)
+      if (schedule.last_backup_time) {
+        const lastBackup = new Date(schedule.last_backup_time);
+        const diffMs = now - lastBackup;
 
-      if (hours > 0) {
-        setTimeUntilNext(`${hours}h ${minutes}m`);
-      } else if (minutes > 0) {
-        setTimeUntilNext(`${minutes}m ${seconds}s`);
+        const minutes = Math.floor(diffMs / (1000 * 60));
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        const timeStr = lastBackup.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        let agoStr = '';
+        if (days > 0) {
+          agoStr = `${days} day${days > 1 ? 's' : ''} ago`;
+        } else if (hours > 0) {
+          agoStr = `${hours} hour${hours > 1 ? 's' : ''} ago`;
+        } else if (minutes > 0) {
+          agoStr = `${minutes} min${minutes > 1 ? 's' : ''} ago`;
+        } else {
+          agoStr = 'just now';
+        }
+
+        setLastBackupFormatted(`${timeStr} (${agoStr})`);
       } else {
-        setTimeUntilNext(`${seconds}s`);
+        setLastBackupFormatted('Never');
       }
-
-      // Format absolute time
-      const timeStr = nextBackup.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-      setNextBackupTime(timeStr);
     };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
+    updateTimes();
+    const interval = setInterval(updateTimes, 1000);
 
     return () => clearInterval(interval);
   }, [schedule]);
@@ -93,37 +128,6 @@ export const SettingsModal = ({ onClose }) => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const formatLastBackup = (timestamp) => {
-    if (!timestamp) return 'Never';
-
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    const timeStr = date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    let agoStr = '';
-    if (days > 0) {
-      agoStr = `${days} day${days > 1 ? 's' : ''} ago`;
-    } else if (hours > 0) {
-      agoStr = `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    } else if (minutes > 0) {
-      agoStr = `${minutes} min${minutes > 1 ? 's' : ''} ago`;
-    } else {
-      agoStr = 'just now';
-    }
-
-    return `${timeStr} (${agoStr})`;
   };
 
   const commonIntervals = [
@@ -245,7 +249,7 @@ export const SettingsModal = ({ onClose }) => {
                     <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-neutral-200 dark:border-neutral-700">
                       <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">Last Backup</p>
                       <p className="text-sm text-neutral-700 dark:text-neutral-300 font-medium">
-                        {formatLastBackup(schedule?.last_backup_time)}
+                        {lastBackupFormatted || 'Never'}
                       </p>
                     </div>
                   </div>
