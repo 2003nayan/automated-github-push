@@ -346,6 +346,74 @@ def delete_project(project_id):
         }), 500
 
 
+@api_bp.route('/browse-folders', methods=['GET'])
+def browse_folders():
+    """Browse filesystem folders for folder selection"""
+    try:
+        # Get the path to browse from query parameter, default to user's home
+        path_param = request.args.get('path', str(Path.home()))
+        current_path = Path(path_param).expanduser().resolve()
+
+        # Security check - don't allow browsing system directories
+        forbidden_paths = ['/etc', '/sys', '/proc', '/dev', '/boot', '/root']
+        if any(str(current_path).startswith(fp) for fp in forbidden_paths):
+            return jsonify({
+                'error': 'Access to system directories is not allowed'
+            }), 403
+
+        # Validate path exists and is a directory
+        if not current_path.exists():
+            return jsonify({
+                'error': f'Path does not exist: {path_param}'
+            }), 404
+
+        if not current_path.is_dir():
+            return jsonify({
+                'error': f'Path is not a directory: {path_param}'
+            }), 400
+
+        # Get parent directory (for "up" navigation)
+        parent = str(current_path.parent) if current_path.parent != current_path else None
+
+        # List subdirectories
+        folders = []
+        try:
+            for item in sorted(current_path.iterdir()):
+                # Skip hidden files/folders and common ignore patterns
+                if item.name.startswith('.'):
+                    continue
+
+                if item.is_dir():
+                    try:
+                        # Check if we can access the folder
+                        list(item.iterdir())
+                        folders.append({
+                            'name': item.name,
+                            'path': str(item),
+                            'is_accessible': True
+                        })
+                    except PermissionError:
+                        folders.append({
+                            'name': item.name,
+                            'path': str(item),
+                            'is_accessible': False
+                        })
+        except PermissionError:
+            return jsonify({
+                'error': 'Permission denied to access this directory'
+            }), 403
+
+        return jsonify({
+            'current_path': str(current_path),
+            'parent_path': parent,
+            'folders': folders
+        })
+
+    except Exception as e:
+        logger.error(f"Error browsing folders: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""

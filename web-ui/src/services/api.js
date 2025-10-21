@@ -33,4 +33,8 @@ export const configApi = {
   get: () => api.get('/config'),
 };
 
+export const browseApi = {
+  getFolders: (path) => api.get('/browse-folders', { params: { path } }),
+};
+
 export default api;
