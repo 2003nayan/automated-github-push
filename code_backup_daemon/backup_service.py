@@ -650,6 +650,9 @@ class BackupService:
                 # Migrate old repos: add account_username if missing
                 self._migrate_repo_accounts()
 
+                # Migrate corrupted timestamps from old code
+                self._migrate_backup_timestamps()
+
                 logger.info(f"Loaded state: {len(self.tracked_repos)} tracked repositories")
         except Exception as e:
             logger.error(f"Error loading state: {e}")
@@ -684,6 +687,73 @@ class BackupService:
         if updated:
             self.save_state()
             logger.info("Repository account migration completed")
+
+    def _migrate_backup_timestamps(self):
+        """Fix corrupted last_backup timestamps and counts from old code that counted no-change runs"""
+        updated = False
+
+        for repo_path, repo_info in self.tracked_repos.items():
+            try:
+                path = Path(repo_path)
+
+                # Skip if repo doesn't exist
+                if not path.exists():
+                    continue
+
+                # Get actual last commit time from git
+                last_commit_info = self.git_service.get_last_commit_info(path)
+
+                if last_commit_info:
+                    actual_last_commit_time = last_commit_info['date']
+                    stored_last_backup = repo_info.get('last_backup')
+
+                    # If we have a stored last_backup, check if it's newer than actual git commit
+                    # This would indicate corruption from old code
+                    if stored_last_backup:
+                        try:
+                            stored_time = datetime.fromisoformat(stored_last_backup)
+
+                            # If stored time is NEWER than actual commit, it's corrupted
+                            if stored_time > actual_last_commit_time:
+                                logger.info(f"Fixing corrupted timestamp for {repo_info.get('name')}: {stored_time} -> {actual_last_commit_time}")
+                                repo_info['last_backup'] = actual_last_commit_time.isoformat()
+
+                                # Also reset backup_count based on actual commit count
+                                # This fixes the inflated count issue
+                                actual_commit_count = self._get_commit_count(path)
+                                if actual_commit_count is not None:
+                                    old_count = repo_info.get('backup_count', 0)
+                                    repo_info['backup_count'] = actual_commit_count
+                                    logger.info(f"Reset backup count for {repo_info.get('name')}: {old_count} -> {actual_commit_count}")
+
+                                updated = True
+                        except ValueError:
+                            pass
+                    else:
+                        # No last_backup stored but we have commits, set it
+                        repo_info['last_backup'] = actual_last_commit_time.isoformat()
+                        updated = True
+                        logger.info(f"Set initial last_backup for {repo_info.get('name')}: {actual_last_commit_time}")
+
+            except Exception as e:
+                logger.debug(f"Could not migrate timestamp for {repo_path}: {e}")
+                continue
+
+        if updated:
+            self.save_state()
+            logger.info("Backup timestamp migration completed")
+
+    def _get_commit_count(self, path: Path) -> Optional[int]:
+        """Get total number of commits in the repository"""
+        try:
+            from git import Repo
+            repo = Repo(path)
+            # Count commits on current branch
+            commit_count = sum(1 for _ in repo.iter_commits())
+            return commit_count
+        except Exception as e:
+            logger.debug(f"Could not get commit count for {path}: {e}")
+            return None
 
     def save_state(self):
         """Save service state to file"""

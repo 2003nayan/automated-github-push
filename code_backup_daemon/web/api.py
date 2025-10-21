@@ -43,6 +43,7 @@ def get_projects():
                 'account': account,
                 'enabled': enabled,
                 'last_backup': repo_info.get('last_backup'),
+                'last_check': repo_info.get('last_check'),
                 'backup_count': repo_info.get('backup_count', 0),
                 'github_url': github_url,
                 'status': repo_info.get('status', 'active'),
