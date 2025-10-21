@@ -1,11 +1,35 @@
-import React, { useState } from 'react';
-import { X, FolderPlus, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, FolderPlus, Loader2, FolderOpen } from 'lucide-react';
 
 export const AddProjectModal = ({ accounts, onClose, onAdd }) => {
   const [folderPath, setFolderPath] = useState('');
   const [selectedAccount, setSelectedAccount] = useState(accounts[0]?.username || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const folderInputRef = useRef(null);
+
+  const handleFolderSelect = (e) => {
+    const files = e.target.files;
+    if (files.length > 0) {
+      // Get the full path from the first file
+      const firstFile = files[0];
+      const fullPath = firstFile.webkitRelativePath || firstFile.path || '';
+
+      // Extract the folder path (remove the filename from the path)
+      if (fullPath) {
+        const pathParts = fullPath.split('/');
+        const folderName = pathParts[0];
+
+        // Since we can't get absolute paths in browser, we'll use the folder name
+        // and let the user edit it to add the full path
+        setFolderPath(folderName);
+      }
+    }
+  };
+
+  const handleBrowseClick = () => {
+    folderInputRef.current?.click();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,16 +85,38 @@ export const AddProjectModal = ({ accounts, onClose, onAdd }) => {
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               Folder Path
             </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={folderPath}
+                onChange={(e) => setFolderPath(e.target.value)}
+                placeholder="/home/user/my-project"
+                className="flex-1 px-4 py-2.5 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-600 rounded-lg text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
+                disabled={isSubmitting}
+              />
+              <button
+                type="button"
+                onClick={handleBrowseClick}
+                className="px-4 py-2.5 bg-neutral-100 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 rounded-lg text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all active:scale-95 flex items-center gap-2"
+                disabled={isSubmitting}
+                title="Browse for folder"
+              >
+                <FolderOpen className="w-4 h-4" />
+                Browse
+              </button>
+            </div>
+            {/* Hidden file input for folder selection */}
             <input
-              type="text"
-              value={folderPath}
-              onChange={(e) => setFolderPath(e.target.value)}
-              placeholder="/home/user/my-project"
-              className="w-full px-4 py-2.5 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-600 rounded-lg text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
-              disabled={isSubmitting}
+              ref={folderInputRef}
+              type="file"
+              webkitdirectory=""
+              directory=""
+              multiple
+              onChange={handleFolderSelect}
+              className="hidden"
             />
             <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-              Enter the absolute path to the folder you want to track
+              Enter the absolute path or click Browse to select a folder
             </p>
           </div>
 

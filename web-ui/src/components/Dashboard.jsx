@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { projectsApi, statusApi, accountsApi } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { useTheme } from '../hooks/useTheme';
+// import { useTheme } from '../hooks/useTheme';
 import { StatusBar } from './StatusBar';
 import { AccountSection } from './AccountSection';
 import { AddProjectModal } from './AddProjectModal';
@@ -14,13 +14,39 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState(null);
   const { connected, events } = useWebSocket();
-  const { theme, toggleTheme } = useTheme();
+  // const { theme, toggleTheme } = useTheme();
 
   // Fetch initial data
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Set default selected account when accounts load or restore from URL
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccount) {
+      // Try to restore from URL query parameter
+      const params = new URLSearchParams(window.location.search);
+      const accountFromUrl = params.get('account');
+
+      if (accountFromUrl && accounts.some(a => a.username === accountFromUrl)) {
+        setSelectedAccount(accountFromUrl);
+      } else {
+        setSelectedAccount(accounts[0].username);
+      }
+    }
+  }, [accounts, selectedAccount]);
+
+  // Persist selected account to URL
+  useEffect(() => {
+    if (selectedAccount) {
+      const params = new URLSearchParams(window.location.search);
+      params.set('account', selectedAccount);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [selectedAccount]);
 
   // Handle WebSocket events
   useEffect(() => {
@@ -176,7 +202,7 @@ export const Dashboard = () => {
               </button>
 
               {/* Theme Toggle */}
-              <button
+              {/* <button
                 onClick={toggleTheme}
                 className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-600 active:scale-95 transition-all"
                 title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
@@ -186,7 +212,7 @@ export const Dashboard = () => {
                 ) : (
                   <Sun className="w-4 h-4 text-neutral-700 dark:text-neutral-200" />
                 )}
-              </button>
+              </button> */}
 
               {/* Refresh Button */}
               <button
@@ -206,13 +232,50 @@ export const Dashboard = () => {
         {/* Status Bar */}
         <StatusBar status={status} />
 
-        {/* Projects by Account */}
-        {accounts.map(account => {
-          const accountProjects = projects.filter(
-            p => p.account === account.username
-          );
+        {/* Account Tabs */}
+        {accounts.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 border-b border-neutral-200 dark:border-neutral-700">
+              {accounts.map(account => {
+                const accountProjects = projects.filter(p => p.account === account.username);
+                const isActive = selectedAccount === account.username;
 
-          return (
+                return (
+                  <button
+                    key={account.username}
+                    onClick={() => setSelectedAccount(account.username)}
+                    className={`px-6 py-3 text-sm font-medium transition-all relative ${
+                      isActive
+                        ? 'text-neutral-950 dark:text-neutral-50'
+                        : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {account.name || account.username}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        isActive
+                          ? 'bg-accent-500 text-white'
+                          : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400'
+                      }`}>
+                        {accountProjects.length}
+                      </span>
+                    </span>
+                    {isActive && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-500 rounded-t-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Selected Account Projects */}
+        {selectedAccount && accounts.length > 0 && (() => {
+          const account = accounts.find(a => a.username === selectedAccount);
+          const accountProjects = projects.filter(p => p.account === selectedAccount);
+
+          return account ? (
             <AccountSection
               key={account.username}
               account={account}
@@ -221,19 +284,19 @@ export const Dashboard = () => {
               onBackup={handleBackup}
               onDelete={handleDelete}
             />
-          );
-        })}
+          ) : null;
+        })()}
 
         {/* Empty State */}
         {projects.length === 0 && !loading && (
           <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-100 rounded-2xl mb-4">
-              <GitBranch className="w-8 h-8 text-neutral-400" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-100 dark:bg-neutral-850 rounded-2xl mb-4">
+              <GitBranch className="w-8 h-8 text-neutral-400 dark:text-neutral-500" />
             </div>
-            <h3 className="text-xl font-semibold text-neutral-950 mb-2">
+            <h3 className="text-xl font-semibold text-neutral-950 dark:text-neutral-50 mb-2">
               No projects yet
             </h3>
-            <p className="text-neutral-500 max-w-md mx-auto">
+            <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto">
               Create a project in your watched folders to start automatic backup syncing
             </p>
           </div>
