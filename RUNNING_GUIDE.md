@@ -195,8 +195,8 @@ echo "// Added new feature" >> index.js
 Wait for next backup cycle (6 hours) or trigger manually:
 ```bash
 source venv/bin/activate
-export GITHUB_TOKEN_NK="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"
-export GITHUB_TOKEN_AI4M="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"
+export GITHUB_TOKEN_NK="your_personal_token_here"
+export GITHUB_TOKEN_AI4M="your_work_token_here"
 
 python -m code_backup_daemon.cli backup test-webapp
 ```

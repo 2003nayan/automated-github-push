@@ -178,7 +178,7 @@ export const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-neutral-950 dark:text-neutral-50 tracking-tight">
-                  Code Backup
+                  AutoGitSafe
                 </h1>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">Automated repository sync</p>
               </div>

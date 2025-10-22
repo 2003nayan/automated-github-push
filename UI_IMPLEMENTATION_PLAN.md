@@ -1157,8 +1157,8 @@ echo "🚀 Starting Code Backup Daemon with Web UI..."
 source venv/bin/activate
 
 # Set environment variables
-export GITHUB_TOKEN_NK="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"
-export GITHUB_TOKEN_AI4M="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"
+export GITHUB_TOKEN_NK="your_personal_token_here"
+export GITHUB_TOKEN_AI4M="your_work_token_here"
 
 # Start daemon with web UI in background
 echo "📡 Starting daemon..."

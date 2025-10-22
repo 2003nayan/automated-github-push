@@ -5,9 +5,10 @@
 
 set -e
 
-# Set environment variables
-export GITHUB_TOKEN_NK="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"
-export GITHUB_TOKEN_AI4M="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"
+# Load environment variables from .env file (if exists)
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
 
 # Activate virtual environment
 source venv/bin/activate

@@ -15,8 +15,10 @@ A smart Python daemon that monitors multiple code folders, detects new projects,
 - ✍️ **Correct Attribution** - Each commit uses the right name/email per account
 - ⚙️ **Configurable** - Customize backup intervals, ignore patterns, and more
 - 🖥️ **CLI Interface** - Easy command-line management
+- 🌐 **Web UI** - React-based dashboard with real-time monitoring
 - 🛠️ **Systemd Support** - Run as system service on Linux
 - 📊 **Status Monitoring** - Track backup statistics and repository health
+- 🔌 **WebSocket Integration** - Real-time updates in the web interface
 
 ## 🎯 Perfect For
 
@@ -32,10 +34,13 @@ A smart Python daemon that monitors multiple code folders, detects new projects,
 - [Multi-Account Setup](#multi-account-setup)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
+  - [CLI Commands](#cli-commands)
+  - [Web UI](#web-ui)
 - [Configuration](#configuration)
 - [How It Works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
 - [Advanced Usage](#advanced-usage)
+- [Testing](#testing)
 - [File Cleanup](#file-cleanup)
 
 ---
@@ -46,6 +51,7 @@ A smart Python daemon that monitors multiple code folders, detects new projects,
 - Git
 - Multiple GitHub accounts (optional, works with single account too)
 - SSH keys configured for each GitHub account
+- Node.js 16+ and npm (optional, only for Web UI)
 
 ### SSH Setup for Multi-Account
 
@@ -103,9 +109,17 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 ### 3. Install Dependencies
 
+**Backend (Python):**
 ```bash
 pip install -r requirements.txt
 pip install -e .
+```
+
+**Frontend (Node.js) - Optional, for Web UI:**
+```bash
+cd web-ui
+npm install
+cd ..
 ```
 
 ### 4. Set Environment Variables
@@ -194,9 +208,31 @@ project_detection:
 
 ## 🚀 Quick Start
 
-### Using Helper Scripts
+### Option 1: Start Everything (Recommended - One Command!)
 
-**Start daemon in foreground (see live logs):**
+**Start both Backend + Frontend:**
+```bash
+./start_all.sh
+```
+
+This single script starts:
+- ✅ Backend daemon (Python + Flask API)
+- ✅ Frontend dev server (React on http://localhost:5173)
+- ✅ Automatically loads tokens from .env
+- ✅ Creates logs/ directory for debugging
+
+**Stop everything:**
+```bash
+./stop_all.sh
+```
+
+Or press `Ctrl+C` in the terminal where you ran `./start_all.sh`
+
+---
+
+### Option 2: Using Separate Scripts
+
+**Start daemon only (no UI):**
 ```bash
 ./start_daemon.sh
 ```
@@ -292,6 +328,58 @@ code-backup remove project-name     # Remove from tracking
 # Configuration
 code-backup config-show        # Display current configuration
 code-backup config-set daemon.backup_interval 3600  # Change settings
+```
+
+### 🌐 Web UI
+
+The project includes a modern React-based web interface for managing your backups visually.
+
+**Start the Web UI:**
+
+```bash
+# Option 1: Using the helper script
+./start_ui.sh
+
+# Option 2: Manual startup
+
+# Terminal 1 - Start backend (daemon with web server)
+./start_backend.sh
+
+# Terminal 2 - Start React dev server
+cd web-ui
+npm install  # First time only
+npm run dev  # Opens at http://localhost:5173
+```
+
+**Web UI Features:**
+- 📊 Real-time dashboard with backup statistics
+- 📁 View all tracked repositories grouped by account
+- ▶️ Enable/disable individual projects
+- 🔄 Manual backup triggers for specific repos
+- 📡 Live updates via WebSocket (no refresh needed)
+- 🎨 Modern interface built with React + Vite + TailwindCSS
+
+**Production Build:**
+```bash
+cd web-ui
+npm run build
+# Static files served by Flask backend at http://localhost:5000
+```
+
+**Configuration:**
+
+Enable/configure the web UI in `config.yaml`:
+```yaml
+ui:
+  enabled: true
+  host: localhost
+  port: 5000
+  theme: dark  # or 'light'
+
+# Project preferences (managed via Web UI)
+project_preferences:
+  my-project-name:
+    enabled: true  # Toggle backup on/off per project
 ```
 
 ---
@@ -617,7 +705,17 @@ automated-github-push/
 │   ├── config.py                # Configuration management
 │   ├── folder_watcher.py        # Filesystem monitoring
 │   ├── git_service.py           # Git operations
-│   └── github_service.py        # GitHub API integration
+│   ├── github_service.py        # GitHub API integration
+│   └── web/                     # Web server components
+│       ├── __init__.py
+│       ├── api.py               # RESTful API endpoints
+│       └── websocket.py         # WebSocket handlers
+│
+├── web-ui/                      # React frontend
+│   ├── src/                     # React components
+│   ├── public/                  # Static assets
+│   ├── package.json             # NPM dependencies
+│   └── vite.config.js           # Vite build config
 │
 ├── setup.py                     # Package setup
 ├── requirements.txt             # Dependencies
@@ -628,6 +726,8 @@ automated-github-push/
 │
 ├── start_daemon.sh             # Start daemon (foreground)
 ├── start_daemon_background.sh  # Start daemon (background)
+├── start_backend.sh            # Start backend with web server
+├── start_ui.sh                 # Start complete UI stack
 ├── check_daemon_status.sh      # Check status
 ├── stop_daemon.sh              # Stop daemon
 │
@@ -677,6 +777,8 @@ automated-github-push/
 
 ## 🧪 Testing
 
+### Backend Tests
+
 Run the test suite:
 
 ```bash
@@ -693,6 +795,15 @@ All tests should pass:
 - ✅ CLI tests (7/7)
 
 **Total: 36/36 tests passing**
+
+### Web UI Tests
+
+```bash
+cd web-ui
+npm install
+npm run test   # Run unit tests
+npm run lint   # Check code style
+```
 
 ---
 
@@ -716,11 +827,21 @@ This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
+### Backend
 - **[GitPython](https://github.com/gitpython-developers/GitPython)** - Git operations
 - **[Watchdog](https://github.com/gorakhargosh/watchdog)** - File system monitoring
 - **[Click](https://click.palletsprojects.com/)** - CLI framework
 - **[PyYAML](https://pyyaml.org/)** - Configuration parsing
 - **[Requests](https://requests.readthedocs.io/)** - HTTP library for GitHub API
+- **[Flask](https://flask.palletsprojects.com/)** - Web framework
+- **[Flask-SocketIO](https://flask-socketio.readthedocs.io/)** - WebSocket support
+- **[Flask-CORS](https://flask-cors.readthedocs.io/)** - CORS handling
+
+### Frontend
+- **[React](https://react.dev/)** - UI framework
+- **[Vite](https://vitejs.dev/)** - Build tool and dev server
+- **[TailwindCSS](https://tailwindcss.com/)** - CSS framework
+- **[Socket.IO Client](https://socket.io/)** - WebSocket client
 
 ---
 
