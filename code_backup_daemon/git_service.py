@@ -307,7 +307,24 @@ class GitService:
 
             # Push to origin with upstream tracking
             origin = repo.remotes.origin
-            origin.push(refspec=f'{current_branch}:{current_branch}', set_upstream=True)
+            push_info = origin.push(refspec=f'{current_branch}:{current_branch}', set_upstream=True)
+
+            # Check push results - GitPython returns PushInfo objects
+            if push_info:
+                for info in push_info:
+                    # Check for errors or rejections
+                    if info.flags & info.ERROR:
+                        logger.error(f"Push error for {path}: {info.summary}")
+                        return False
+                    if info.flags & info.REJECTED:
+                        logger.error(f"Push rejected for {path}: {info.summary}")
+                        return False
+                    if info.flags & info.REMOTE_REJECTED:
+                        logger.error(f"Push remote rejected for {path}: {info.summary}")
+                        return False
+                    if info.flags & info.REMOTE_FAILURE:
+                        logger.error(f"Push remote failure for {path}: {info.summary}")
+                        return False
 
             logger.info(f"Pushed changes for {path}")
             return True

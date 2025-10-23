@@ -110,7 +110,7 @@ if ! ps -p $BACKEND_PID > /dev/null; then
     exit 1
 fi
 
-echo "✅ Backend started on http://127.0.0.1:5000"
+echo "✅ Backend started on http://127.0.0.1:8080"
 echo ""
 
 # Start Frontend (React dev server)
@@ -140,7 +140,7 @@ echo "============================================================"
 echo ""
 echo "📊 Access Points:"
 echo "   • Web UI:        http://localhost:5173"
-echo "   • Backend API:   http://127.0.0.1:5000"
+echo "   • Backend API:   http://127.0.0.1:8080"
 echo ""
 echo "📝 Logs:"
 echo "   • Backend:  tail -f logs/backend.log"

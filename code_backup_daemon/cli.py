@@ -49,7 +49,7 @@ def start_web_ui(service, config):
         service.websocket_handler = WebSocketHandler(socketio)
 
         host = config.get('ui.host', '127.0.0.1')
-        port = config.get('ui.port', 5000)
+        port = config.get('ui.port', 8080)
 
         def run_web_server():
             # Use eventlet for production-ready async support

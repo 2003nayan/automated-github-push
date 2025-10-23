@@ -1,35 +1,27 @@
 [Unit]
-Description=Code Backup Daemon
+Description=Code Backup Daemon with Web UI
 Documentation=https://github.com/your-username/code-backup-daemon
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=%i
-Group=%i
-WorkingDirectory=%h
-ExecStart=/usr/local/bin/code-backup start
-ExecStop=/usr/local/bin/code-backup stop
+WorkingDirectory=/home/nayan-ai4m/Desktop/NK/automated-github-push
+ExecStart=/home/nayan-ai4m/Desktop/NK/automated-github-push/venv/bin/python -m code_backup_daemon.cli start
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=30
 
 # Environment variables
-Environment=HOME=%h
-Environment=USER=%i
+Environment=HOME=/home/nayan-ai4m
+EnvironmentFile=/home/nayan-ai4m/Desktop/NK/automated-github-push/.env
 
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-PrivateDevices=true
+# Security settings (relaxed for user service)
 ProtectHome=false
-ProtectSystem=strict
-ReadWritePaths=%h/.local/share/code-backup %h/.config/code-backup %h/CODE
 
 # Resource limits
 LimitNOFILE=65536
-MemoryMax=512M
+MemoryMax=1G
 
 # Logging
 StandardOutput=journal

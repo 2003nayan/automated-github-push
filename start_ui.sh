@@ -9,7 +9,7 @@ cd "$PROJECT_DIR/web-ui"
 echo "🎨 Starting React Dev Server..."
 echo ""
 echo "Web UI will be available at: http://localhost:5173"
-echo "Make sure the daemon is running on port 5000"
+echo "Make sure the daemon is running on port 8080"
 echo ""
 
 npm run dev

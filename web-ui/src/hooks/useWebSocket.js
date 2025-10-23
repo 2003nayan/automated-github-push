@@ -1,13 +1,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-export const useWebSocket = (url = 'http://localhost:5000') => {
+export const useWebSocket = (url) => {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState([]);
 
   useEffect(() => {
-    const newSocket = io(url, {
+    // Use current origin if no URL provided (works in both dev and production)
+    const socketUrl = url || window.location.origin;
+
+    const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling'],
     });
 

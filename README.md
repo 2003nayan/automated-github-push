@@ -216,10 +216,16 @@ project_detection:
 ```
 
 This single script starts:
-- ✅ Backend daemon (Python + Flask API)
-- ✅ Frontend dev server (React on http://localhost:5173)
+- ✅ Backend daemon (Python + Flask API on http://localhost:8080)
+- ✅ Frontend dev server (React on http://localhost:5173, proxies to backend)
 - ✅ Automatically loads tokens from .env
 - ✅ Creates logs/ directory for debugging
+
+**Production Mode (Single Service):**
+```bash
+systemctl --user start code-backup
+# Access UI at http://localhost:8080
+```
 
 **Stop everything:**
 ```bash
@@ -363,7 +369,10 @@ npm run dev  # Opens at http://localhost:5173
 ```bash
 cd web-ui
 npm run build
-# Static files served by Flask backend at http://localhost:5000
+# Static files served by Flask backend at http://localhost:8080
+
+# Production service runs as single unified service
+systemctl --user start code-backup
 ```
 
 **Configuration:**
@@ -373,7 +382,7 @@ Enable/configure the web UI in `config.yaml`:
 ui:
   enabled: true
   host: localhost
-  port: 5000
+  port: 8080
   theme: dark  # or 'light'
 
 # Project preferences (managed via Web UI)

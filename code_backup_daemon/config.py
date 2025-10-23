@@ -73,7 +73,7 @@ class Config:
         'ui': {
             'enabled': True,
             'host': '127.0.0.1',
-            'port': 5000,
+            'port': 8080,
             'auto_open_browser': True,
             'theme': 'dark'
         },
