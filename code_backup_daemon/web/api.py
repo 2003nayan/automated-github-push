@@ -425,19 +425,32 @@ def get_backup_schedule():
         # Get backup interval in seconds
         interval_seconds = config.get('daemon.backup_interval', 21600)
 
-        # Calculate next backup time
-        last_backup_time = service.stats.get('last_backup_time')
+        # Get the most recent ACTUAL push time across all repositories
+        # (not the last backup cycle time)
+        most_recent_push = None
+        for repo_info in service.repositories.values():
+            last_backup = repo_info.get('last_backup')
+            if last_backup:
+                try:
+                    backup_dt = datetime.fromisoformat(last_backup) if isinstance(last_backup, str) else last_backup
+                    if most_recent_push is None or backup_dt > most_recent_push:
+                        most_recent_push = backup_dt
+                except Exception:
+                    continue
+
+        # Calculate next backup time based on last backup cycle
+        last_cycle_time = service.stats.get('last_backup_time')
         next_backup_time = None
 
-        if last_backup_time:
+        if last_cycle_time:
             try:
-                if isinstance(last_backup_time, str):
-                    last_backup_dt = datetime.fromisoformat(last_backup_time)
+                if isinstance(last_cycle_time, str):
+                    last_cycle_dt = datetime.fromisoformat(last_cycle_time)
                 else:
-                    last_backup_dt = last_backup_time
+                    last_cycle_dt = last_cycle_time
 
                 from datetime import timedelta
-                next_backup_dt = last_backup_dt + timedelta(seconds=interval_seconds)
+                next_backup_dt = last_cycle_dt + timedelta(seconds=interval_seconds)
                 next_backup_time = next_backup_dt.isoformat()
             except Exception as e:
                 logger.error(f"Error calculating next backup time: {e}")
@@ -445,7 +458,7 @@ def get_backup_schedule():
         return jsonify({
             'interval_seconds': interval_seconds,
             'interval_hours': interval_seconds / 3600,
-            'last_backup_time': last_backup_time,
+            'last_backup_time': most_recent_push.isoformat() if most_recent_push else None,
             'next_backup_time': next_backup_time,
             'auto_backup_enabled': service.running
         })
